@@ -43,12 +43,6 @@ defmodule TelemetryMetricsMnesia do
   defp keep?(%{keep: keep}, metadata) when keep != nil, do: keep.(metadata)
   defp keep?(_metric, _metadata), do: true
 
-  defp extract_measurement(metric, measurements) do
-    case metric.measurement do
-      fun when is_function(fun, 1) -> fun.(measurements)
-      key -> measurements[key]
-    end
-  end
 
   def extract_tags(metric, metadata) do
     tag_values = metric.tag_values.(metadata)

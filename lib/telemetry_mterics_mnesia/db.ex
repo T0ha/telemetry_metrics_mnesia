@@ -13,9 +13,7 @@ defmodule TelemetryMetricsMnesia.Db do
 
   def write_event(event, measurements, metadata) do
     transaction = fn() ->
-      timestamp =
-        DateTime.utc_now()
-        |> DateTime.to_unix()
+      timestamp = System.os_time(:microsecond)
       Mnesia.write(telemetry_events(key: {timestamp, event}, measurements: measurements, metadata: metadata))
     end
 
@@ -34,7 +32,36 @@ defmodule TelemetryMetricsMnesia.Db do
   end
 
   def fetch(%Telemetry.Metrics.Counter{event_name: event_name}) do
-    Mnesia.dirty_match_object(telemetry_events(key: {:_, event_name}))
+    telemetry_events(key: {:_, event_name})
+    |> Mnesia.dirty_match_object()
     |> length()
+  end
+
+  def fetch(%Telemetry.Metrics.Sum{event_name: event_name} = metric) do
+    fn ->
+      Mnesia.match_object(:telemetry_events, telemetry_events(key: {:_, event_name}), :read)
+    end
+    |> Mnesia.transaction()
+    |> elem(1)
+    |> Enum.reduce(0, fn event, acc ->
+      event
+      |> telemetry_events(:measurements)
+      |> extract_measurement(metric)
+      |> Kernel.+(acc)
+    end)
+  end
+
+  def fetch(%Telemetry.Metrics.LastValue{event_name: event_name}) do
+    :notimpl
+  end
+
+
+  def fetch(_), do: :notimpl
+
+  defp extract_measurement(measurements, metric) do
+    case metric.measurement do
+      fun when is_function(fun, 1) -> fun.(measurements)
+      key -> measurements[key]
+    end
   end
 end
