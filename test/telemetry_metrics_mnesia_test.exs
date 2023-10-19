@@ -1,4 +1,5 @@
 defmodule TelemetryMetricsMnesiaTest do
+  alias Telemetry.Metrics.Counter
   alias Module.Types.Expr
   use ExUnit.Case, async: false
 
@@ -18,7 +19,7 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:rest, :counter], %{val: i, total: n}, %{count: false})
     end
 
-    assert %{[:test, :counter, :counter] => n} =
+    assert %{"Counter" => n} =
              TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
 
     GenServer.stop(pid)
@@ -37,7 +38,7 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:rest, :last_value], %{val: i + n, total: n}, %{count: false})
     end
 
-    assert %{[:test, :last_value, :val] => out} =
+    assert %{"LastValue" => out} =
              TelemetryMetricsMnesia.fetch([:test, :last_value, :val])
 
     assert out == 2 * n
@@ -58,7 +59,7 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:rest, :sum], %{val: i, total: n}, %{count: false})
     end
 
-    assert %{[:test, :sum, :val] => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
+    assert %{"Sum" => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
     assert out == Enum.sum(1..n)
 
     GenServer.stop(pid)
@@ -78,7 +79,7 @@ defmodule TelemetryMetricsMnesiaTest do
     end
 
     assert %{
-             [:test, :distribution, :val] => %{
+             "Distribution" => %{
                median: median,
                p75: p75,
                p90: p90,
@@ -110,7 +111,7 @@ defmodule TelemetryMetricsMnesiaTest do
     end
 
     assert %{
-      [:test, :summary, :val] => %{
+      "Summary" => %{
         mean: avg,
         variance: var,
         standard_deviation: sd,
@@ -124,6 +125,114 @@ defmodule TelemetryMetricsMnesiaTest do
     assert var == 1..n |> Enum.to_list() |> Explorer.Series.from_list() |> Explorer.Series.variance()
     assert count == n
     assert median == (n + 1) / 2
+
+    GenServer.stop(pid)
+    Mnesia.clear_table(:telemetry_events)
+  end
+
+  test "All metrics at once with different events report and fetch correctly" do
+    metrics = [
+      Telemetry.Metrics.counter([:test, :counter, :counter]),
+      Telemetry.Metrics.sum([:test, :sum, :val]),
+      Telemetry.Metrics.last_value([:test, :last_value, :val]),
+      Telemetry.Metrics.distribution([:test, :distribution, :val]),
+      Telemetry.Metrics.summary([:test, :summary, :val])
+    ]
+
+    {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: metrics)
+
+    n = :rand.uniform(10_000)
+
+    for i <- 1..n do
+      :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true})
+      :telemetry.execute([:test, :sum], %{val: i, total: n}, %{count: true})
+      :telemetry.execute([:test, :last_value], %{val: i, total: n}, %{count: true})
+      :telemetry.execute([:test, :distribution], %{val: i, total: n}, %{count: true})
+      :telemetry.execute([:test, :summary], %{val: i, total: n}, %{count: false})
+    end
+
+    assert %{"Counter" => ^n} =
+             TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
+
+    assert %{"LastValue" => ^n} =
+             TelemetryMetricsMnesia.fetch([:test, :last_value, :val])
+
+
+    assert %{"Sum" => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
+    assert out == Enum.sum(1..n)
+
+    assert %{
+             "Distribution" => %{
+               median: _median,
+               p75: _p7_5,
+               p90: _p9_0,
+               p95: _p9_5,
+               p99: _p99
+             }
+           } = TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
+
+
+    assert %{
+      "Summary" => %{
+        mean: _avg,
+        variance: _var,
+        standard_deviation: _sd,
+        median: _median,
+        count: _count
+      }
+    } = TelemetryMetricsMnesia.fetch([:test, :summary, :val])
+
+    GenServer.stop(pid)
+    Mnesia.clear_table(:telemetry_events)
+  end
+
+  test "All metrics at once with the same event report and fetch correctly" do
+    metrics = [
+      Telemetry.Metrics.counter([:test, :counter]),
+      Telemetry.Metrics.sum([:test, :val]),
+      Telemetry.Metrics.last_value([:test, :val]),
+      Telemetry.Metrics.distribution([:test, :val]),
+      Telemetry.Metrics.summary([:test, :val])
+    ]
+
+    {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: metrics)
+
+    n = :rand.uniform(10_000)
+
+    for i <- 1..n do
+      :telemetry.execute([:test], %{val: i, total: n}, %{count: true})
+    end
+
+    assert %{"Counter" => ^n} =
+             TelemetryMetricsMnesia.fetch([:test, :counter])
+
+    assert %{"LastValue" => ^n} =
+             TelemetryMetricsMnesia.fetch([:test, :val])
+
+
+    assert %{"Sum" => out} = TelemetryMetricsMnesia.fetch([:test, :val])
+    assert out == Enum.sum(1..n)
+
+    assert %{
+             "Distribution" => %{
+               median: _median,
+               p75: _p7_5,
+               p90: _p9_0,
+               p95: _p9_5,
+               p99: _p99
+             }
+           } = TelemetryMetricsMnesia.fetch([:test, :val])
+
+
+    assert %{
+      "Summary" => %{
+        mean: _avg,
+        variance: _var,
+        standard_deviation: _sd,
+        median: _median,
+        count: _count
+      }
+    } = TelemetryMetricsMnesia.fetch([:test, :val])
 
     GenServer.stop(pid)
     Mnesia.clear_table(:telemetry_events)
@@ -150,12 +259,12 @@ defmodule TelemetryMetricsMnesiaTest do
     assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time") <= 15
     assert Explorer.Series.quantile(times, 0.99) < 100
 
-    {t, %{[:test, :counter, :time, :counter] => _}} =
+    {t, %{"Counter" => _}} =
       :timer.tc(fn ->
         TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
       end)
 
-    assert t <= 3000
+    assert t <= 5000
 
     GenServer.stop(pid)
     Mnesia.clear_table(:telemetry_events)

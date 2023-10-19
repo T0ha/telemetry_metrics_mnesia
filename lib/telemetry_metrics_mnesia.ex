@@ -24,8 +24,13 @@ defmodule TelemetryMetricsMnesia do
   @impl true
   def handle_call({:fetch, metric_name, opts}, _from, %{metrics: metrics} = state) do
     reply =
-      for metric <- metrics, metric.name == metric_name, into: %{} do
-        {metric.name, Db.fetch(metric)}
+      for %mod{} = metric <- metrics, metric.name == metric_name, into: %{} do
+        type =
+          mod
+          |> Module.split()
+          |> List.last()
+        
+        {type, Db.fetch(metric)}
       end
 
     {:reply, reply, state}
