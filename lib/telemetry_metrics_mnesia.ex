@@ -29,7 +29,7 @@ defmodule TelemetryMetricsMnesia do
           mod
           |> Module.split()
           |> List.last()
-        
+
         {type, Db.fetch(metric)}
       end
 
