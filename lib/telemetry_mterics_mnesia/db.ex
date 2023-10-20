@@ -61,8 +61,6 @@ defmodule TelemetryMetricsMnesia.Db do
     |> build_transaction_fun()
     |> Mnesia.transaction()
     |> elem(1)
-
-    # |> IO.inspect()
   end
 
   defp build_transaction_fun(metric) do
@@ -122,7 +120,6 @@ defmodule TelemetryMetricsMnesia.Db do
   def reduce_events(events, %mod{tags: _}, reducer, acc) when mod in [Distribution, Summary] do
     events
     |> Enum.reduce(acc, reducer)
-    |> IO.inspect()
     |> Map.new(stat_fun(mod))
   end
 
