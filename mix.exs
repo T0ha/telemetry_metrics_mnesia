@@ -23,7 +23,7 @@ defmodule TelemetryMetricsMnesia.MixProject do
     [
       {:telemetry_metrics, "~> 0.6"},
       {:explorer, "~> 0.7"},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false}
     ]
   end
 end
