@@ -94,9 +94,9 @@ defmodule TelemetryMetricsMnesia.Db do
 
     [
       {
-        telemetry_events(key: {:"$1", event_name}, measurements: :"$2"),
+        telemetry_events(key: {:"$1", event_name}, measurements: %{key => :"$2"}),
         [],
-        [{:map_get, key, :"$2"}]
+        [:"$2"]
       }
     ]
   end
