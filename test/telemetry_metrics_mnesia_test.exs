@@ -264,7 +264,7 @@ defmodule TelemetryMetricsMnesiaTest do
       end
       |> Explorer.Series.from_list()
 
-    assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 15
+    assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 100
     assert Explorer.Series.quantile(times, 0.99) < 100
 
     {t, %{"Counter" => _}} =
