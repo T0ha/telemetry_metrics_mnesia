@@ -1,4 +1,5 @@
 defmodule TelemetryMetricsMnesiaTest do
+  # credo:disable-for-this-file
   alias Telemetry.Metrics.Distribution
   alias Telemetry.Metrics.Counter
   alias Module.Types.Expr
