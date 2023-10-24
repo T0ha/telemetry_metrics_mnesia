@@ -66,25 +66,25 @@ defmodule TelemetryMetricsMnesia do
   #### `Counter`
 
   ```
-   %{"Counter" => 2}
+   %{Telemetry.Metrics.Counter => 2}
   ```
 
   #### `Sum`
 
   ```
-  %{"Sum" => 4}
+  %{Telemetry.Metrics.Sum => 4}
   ```
 
   #### `last_value`
 
   ```
-  %{"LastValue" => 8}
+  %{Telemetry.Metrics.LastValue => 8}
   ```
 
   #### `Distribution`
 
   ```
-  %{"Distribution" => %{
+  %{Telemetry.Metrics.Distribution => %{
       median: 5,
       p75: 6,
       p90: 6.5,
@@ -97,7 +97,7 @@ defmodule TelemetryMetricsMnesia do
   #### `Summary`
 
   ```
-   %{"Summary" => %{
+   %{Telemetry.Metrics.Summary => %{
      mean: 5,
      median: 6,
      variance: 1,
@@ -112,14 +112,14 @@ defmodule TelemetryMetricsMnesia do
 
   ```elixir
   %{
-    "Distribution" => %{
+    Telemetry.Metrics.Distribution => %{
       median: 4,
       p75: 5,
       p90: 7,
       p95: 7,
       p99: 8
     },
-    "Summary" => %{
+    Telemetry.Metrics.Summary => %{
       mean: 5,
       variance: 1,
       standard_deviation: 0.5,
@@ -133,7 +133,7 @@ defmodule TelemetryMetricsMnesia do
   A nested `Map` with metric type keys at the first level and maps with tags vs values at the second.
   ```elixir
   %{
-      "Counter" => %{
+      Telemetry.Metrics.Counter => %{
           %{endpoint: "/", code: 200} => 10,
           %{endpoint: "/", code: 500} => 100,
           %{endpoint: "/api", code: 200} => 500
@@ -150,25 +150,36 @@ defmodule TelemetryMetricsMnesia do
   @type option() :: {:metrics, Telemetry.Metrics.t()}
 
   @type distribution() :: %{
-    median: number(),
-    p75: number(),
-    p90: number(),
-    p95: number(),
-    p99: number()
-  }
+          median: number(),
+          p75: number(),
+          p90: number(),
+          p95: number(),
+          p99: number()
+        }
 
   @type summary() :: %{
-    median: number(),
-    mean: number(),
-    variance: number(),
-    count: number(),
-    standard_deviation: number()
-  }
+          median: number(),
+          mean: number(),
+          variance: number(),
+          count: number(),
+          standard_deviation: number()
+        }
+
+  @type tagged_metrics(inner_type) :: %{
+          (tag :: term()) => inner_type
+        }
 
   @typedoc """
   See ["How metrics returned"](#module-how-metrics-returned)
   """
-  @type metric_data() :: %{String.t() => number() | distribution() | summary()}
+  @type metric_data() :: %{
+          optional(Telemetry.Metrics.Counter) => number() | tagged_metrics(number()),
+          optional(Telemetry.Metrics.Distribution) =>
+            distribution() | tagged_metrics(distribution()),
+          optional(Telemetry.Metrics.Summary) => summary() | tagged_metrics(summary()),
+          optional(Telemetry.Metrics.LastValue) => number() | tagged_metrics(number()),
+          optional(Telemetry.Metrics.Sum) => number() | tagged_metrics(number())
+        }
 
   @doc """
   Starts a reporter and links it to the process.
@@ -207,12 +218,7 @@ defmodule TelemetryMetricsMnesia do
   def handle_call({:fetch, metric_name, _opts}, _from, %{metrics: metrics} = state) do
     reply =
       for %mod{} = metric <- metrics, metric.name == metric_name, into: %{} do
-        type =
-          mod
-          |> Module.split()
-          |> List.last()
-
-        {type, Db.fetch(metric)}
+        {mod, Db.fetch(metric)}
       end
 
     {:reply, reply, state}
