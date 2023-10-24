@@ -1,13 +1,18 @@
 defmodule TelemetryMetricsMnesia.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :telemetry_metrics_mnesia,
-      version: "0.1.0",
+      version: @version,
+      description: description(),
+      package: package(),
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      source_url: "https://github.com/T0ha/telemetry_metrics_mnesia"
     ]
   end
 
@@ -16,6 +21,21 @@ defmodule TelemetryMetricsMnesia.MixProject do
     [
       extra_applications: [:logger, :mnesia]
     ]
+  end
+
+  defp description() do
+    """
+    `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
+    """
+  end
+
+  defp package() do
+    %{
+      licenses: ["GPL-3.0-only"],
+      links: %{
+        "GitHub" => "https://github.com/T0ha/telemetry_metrics_mnesia"
+      }
+    }
   end
 
   # Run "mix help deps" to learn about dependencies.

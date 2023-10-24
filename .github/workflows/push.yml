@@ -1,0 +1,180 @@
+name: Build, check and test
+on: push
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  MIX_ENV: test
+  OTP_VSN: "26.0.2"
+  ELIXIR_VSN: "1.15.4"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Set up Elixir
+        id: beam
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VSN }}
+          otp-version: ${{ env.OTP_VSN }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Init Deps Cache
+        uses: actions/cache/restore@v3
+        id: deps-cache
+        with:
+          key: v2-deps-${{ hashFiles('./mix.lock') }}
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+      - name: Init Code Cache
+        uses: actions/cache/restore@v3
+        id: code-cache
+        with:
+          key: v2-code-${{ github.sha }}
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+      - name: Get deps
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: mix deps.get
+
+      - name: Compile dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: mix deps.compile
+
+      - name: Save Deps Cache
+        uses: actions/cache/save@v3
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        with:
+          key: v2-deps-${{ hashFiles('./mix.lock') }}
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+      - name: Compile
+        if: steps.code-cache.outputs.cache-hit != 'true'
+        run: mix compile
+
+      - name: Save Code Cache
+        uses: actions/cache/save@v3
+        if: steps.code-cache.outputs.cache-hit != 'true'
+        with:
+          key: v2-code-${{ github.sha }}
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+  code_checks:
+    name: Run code checks
+    needs: build
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Set up Elixir
+        id: beam
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VSN }}
+          otp-version: ${{ env.OTP_VSN }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Restore Code Cache
+        uses: actions/cache/restore@v3
+        id: cache
+        with:
+          key: v2-deps-${{ hashFiles('./mix.lock') }}
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+      - name: Compile and chack warnings
+        run: mix do clean, compile --warnings-as-errors
+
+      - name: Format
+        run: mix format --check-formatted
+
+      - name: Credo
+        run: mix credo
+
+  dialyzer:
+    name: Run dialyzer
+    needs: build
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Set up Elixir
+        id: beam
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VSN }}
+          otp-version: ${{ env.OTP_VSN }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Restore Code Cache
+        uses: actions/cache/restore@v3
+        id: cache
+        with:
+          key: v2-code-${{ github.sha }}
+
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+      - name: Run dialyzer
+        run: mix dialyzer --format github
+
+  tests:
+    name: Run tests
+    needs: build
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Set up Elixir
+        id: beam
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VSN }}
+          otp-version: ${{ env.OTP_VSN }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Restore Code Cache
+        uses: actions/cache/restore@v3
+        id: cache
+        with:
+          key: v2-code-${{ github.sha }}
+          path: |
+            ~/.mix
+            ~/.hex
+            ./deps
+            ./_build
+
+      - name: Tests
+        run: mix test
