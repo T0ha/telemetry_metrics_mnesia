@@ -1,6 +1,6 @@
 defmodule TelemetryMetricsMnesia do
   @moduledoc """
-  `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
+  `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB.
 
   ## Installation
 
@@ -55,7 +55,7 @@ defmodule TelemetryMetricsMnesia do
 
   ## How metrics stored
 
-  By default, raw events with timestamps are stored in `memory_only` tables in Mnesia DB without distribution. 
+  By default, raw events with timestamps are stored in `memory_only` tables in Mnesia DB without distribution.
   These options are going to be implemented soon...
 
   ## How metrics returned
@@ -66,45 +66,45 @@ defmodule TelemetryMetricsMnesia do
   #### `Counter`
 
   ```
-   %{"Counter" => 2}           
+   %{"Counter" => 2}
   ```
 
-  #### `Sum` 
+  #### `Sum`
 
   ```
-  %{"Sum" => 4}               
+  %{"Sum" => 4}
   ```
 
-  #### `last_value`   
+  #### `last_value`
 
   ```
   %{"LastValue" => 8}
   ```
 
-  #### `Distribution` 
+  #### `Distribution`
 
   ```
-  %{"Distribution" => %{      
+  %{"Distribution" => %{
       median: 5,
-      p75: 6,     
-      p90: 6.5,   
-      p95: 6.6,   
-      p99: 6.6    
-    }            
+      p75: 6,
+      p90: 6.5,
+      p95: 6.6,
+      p99: 6.6
+    }
   }
   ```
 
-  #### `Summary` 
+  #### `Summary`
 
   ```
-   %{"Summary" => %{ 
-     mean: 5,               
-     median: 6,             
-     variance: 1,           
+   %{"Summary" => %{
+     mean: 5,
+     median: 6,
+     variance: 1,
      standard_diviation: 0.5,
-     count: 100             
-    }                       
-  }                         
+     count: 100
+    }
+  }
   ```
 
   ### Several metric types at once
@@ -149,10 +149,26 @@ defmodule TelemetryMetricsMnesia do
   @type options() :: [option()]
   @type option() :: {:metrics, Telemetry.Metrics.t()}
 
+  @type distribution() :: %{
+    median: number(),
+    p75: number(),
+    p90: number(),
+    p95: number(),
+    p99: number()
+  }
+
+  @type summary() :: %{
+    median: number(),
+    mean: number(),
+    variance: number(),
+    count: number(),
+    standard_deviation: number()
+  }
+
   @typedoc """
   See ["How metrics returned"](#module-how-metrics-returned)
   """
-  @type metric_data() :: %{String.t() => number() | map() | term()}
+  @type metric_data() :: %{String.t() => number() | distribution() | summary()}
 
   @doc """
   Starts a reporter and links it to the process.
@@ -162,6 +178,7 @@ defmodule TelemetryMetricsMnesia do
 
   More examples in ["Starting"](#module-starting)
   """
+
   @spec start_link(options()) :: GenServer.on_start()
   def start_link(options), do: GenServer.start_link(__MODULE__, options, name: __MODULE__)
 
@@ -177,7 +194,7 @@ defmodule TelemetryMetricsMnesia do
   end
 
   @doc """
-  Retrieves metric data by its name. Returns a map. 
+  Retrieves metric data by its name. Returns a map.
 
   `opts` are reserved for future.
 
