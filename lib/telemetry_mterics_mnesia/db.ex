@@ -11,9 +11,9 @@ defmodule TelemetryMetricsMnesia.Db do
 
   @type t() ::
           record(:telemetry_events,
-            key: {Telemetry.event_name(), non_neg_integer()},
-            measurements: Telemetry.event_measurements(),
-            metadata: Telemetry.event_metadata()
+            key: {:telemetry.event_name(), non_neg_integer()},
+            measurements: :telemetry.event_measurements(),
+            metadata: :telemetry.event_metadata()
           )
 
   def write_event(event, measurements, metadata) do

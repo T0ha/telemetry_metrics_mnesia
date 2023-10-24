@@ -4,25 +4,9 @@ defmodule TelemetryMetricsMnesia.EventHandler do
   require Logger
   require Record
 
-  alias :mnesia, as: Mnesia
   alias TelemetryMetricsMnesia.Db
 
-  Record.defrecord(:telemetry_events,
-    key: {[], nil},
-    measurements: %{},
-    metadata: %{},
-    timestamp: nil
-  )
-
-  @type t() ::
-          record(:telemetry_events,
-            key: {Telemetry.event_name(), non_neg_integer()},
-            measurements: Telemetry.event_measurements(),
-            metadata: Telemetry.event_metadata(),
-            timestamp: DateTime.t()
-          )
-
-  @type metrics() :: [Metrics.t()]
+  @type metrics() :: [Telemetry.Metrics.t()]
 
   @spec attach(metrics) :: [:telemetry.handler_id()]
   def attach(metrics) do
@@ -45,9 +29,9 @@ defmodule TelemetryMetricsMnesia.EventHandler do
   end
 
   @spec handle_event(
-          Telemetry.event_name(),
-          Telemetry.event_measurements(),
-          Telemetry.event_metadata(),
+          :telemetry.event_name(),
+          :telemetry.event_measurements(),
+          :telemetry.event_metadata(),
           metrics()
         ) :: :ok | {:error, any()}
   def handle_event(event, measurements, metadata, _metrics) do
