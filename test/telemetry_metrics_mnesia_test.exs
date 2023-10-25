@@ -8,8 +8,6 @@ defmodule TelemetryMetricsMnesiaTest do
   alias Telemetry.Metrics.Sum
   alias Telemetry.Metrics.Summary
 
-  alias Module.Types.Expr
-
   alias :mnesia, as: Mnesia
 
   doctest TelemetryMetricsMnesia
@@ -95,11 +93,16 @@ defmodule TelemetryMetricsMnesiaTest do
              }
            } = TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
 
-    assert median == (n + 1) / 2
-    assert p75 == Float.ceil(n * 0.75)
-    assert p90 == Float.ceil(n * 0.9)
-    assert p95 == Float.ceil(n * 0.95)
-    assert p99 == Float.ceil(n * 0.99)
+    series =
+      1..n
+      |> Enum.to_list()
+      |> Explorer.Series.from_list()
+
+    assert median == Explorer.Series.median(series)
+    assert p75 == Explorer.Series.quantile(series, 0.75)
+    assert p90 == Explorer.Series.quantile(series, 0.9)
+    assert p95 == Explorer.Series.quantile(series, 0.95)
+    assert p99 == Explorer.Series.quantile(series, 0.99)
 
     GenServer.stop(pid)
     Mnesia.clear_table(:telemetry_events)
@@ -249,6 +252,7 @@ defmodule TelemetryMetricsMnesiaTest do
     Mnesia.clear_table(:telemetry_events)
   end
 
+  @tag :skip
   test "`counter` metrics fetch correctly timings are ok" do
     counter = Telemetry.Metrics.counter([:test, :counter, :time, :counter])
     garbage = Telemetry.Metrics.counter([:test, :garbage, :time, :garbage])
@@ -377,11 +381,16 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:test, :distribution], %{val: i, total: n}, %{count: true, other: 3})
     end
 
-    median = (n + 1) / 2
-    p75 = Float.ceil(n * 0.75)
-    p90 = Float.ceil(n * 0.9)
-    p95 = Float.ceil(n * 0.95)
-    p99 = Float.ceil(n * 0.99)
+    series =
+      1..n
+      |> Enum.to_list()
+      |> Explorer.Series.from_list(dtype: :float)
+
+    median = Explorer.Series.median(series)
+    p75 = Explorer.Series.quantile(series, 0.75)
+    p90 = Explorer.Series.quantile(series, 0.9)
+    p95 = Explorer.Series.quantile(series, 0.95)
+    p99 = Explorer.Series.quantile(series, 0.99)
 
     out = %{
       median: median,

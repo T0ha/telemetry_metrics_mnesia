@@ -6,11 +6,11 @@ defmodule TelemetryMetricsMnesia do
 
   Just add the reporter to your dependencies in `mix.exs`:
 
-    defp deps do
-      [
-        {:telemetry_metrics_mnesia, "~> 0.1.0"}
-      ]
-    end
+      defp deps do
+        [
+          {:telemetry_metrics_mnesia, "~> 0.1.0"}
+        ]
+      end
 
   ## Starting
 
@@ -53,12 +53,13 @@ defmodule TelemetryMetricsMnesia do
 
   <!-- tabs-close -->
 
-  ## How metrics stored
+  ## How metrics are stored
 
   By default, raw events with timestamps are stored in `memory_only` tables in Mnesia DB without distribution.
+
   These options are going to be implemented soon...
 
-  ## How metrics returned
+  ## How metrics are returned
 
   ### Single metric
   A `Map` with a metric type key.
@@ -75,7 +76,7 @@ defmodule TelemetryMetricsMnesia do
   %{Telemetry.Metrics.Sum => 4}
   ```
 
-  #### `last_value`
+  #### `LastValue`
 
   ```
   %{Telemetry.Metrics.LastValue => 8}
@@ -170,7 +171,7 @@ defmodule TelemetryMetricsMnesia do
         }
 
   @typedoc """
-  See ["How metrics returned"](#module-how-metrics-returned)
+  See ["How metrics are returned"](#module-how-metrics-are-returned)
   """
   @type metric_data() :: %{
           optional(Telemetry.Metrics.Counter) => number() | tagged_metrics(number()),
@@ -209,7 +210,7 @@ defmodule TelemetryMetricsMnesia do
 
   `opts` are reserved for future.
 
-  More info in ["How metrics returned"](#module-how-metrics-returned).
+  More info in ["How metrics are returned"](#module-how-metrics-are-returned).
   """
   @spec fetch(Metrics.metric_name(), %{}) :: metric_data()
   def fetch(metric_name, opts \\ %{}), do: GenServer.call(__MODULE__, {:fetch, metric_name, opts})
