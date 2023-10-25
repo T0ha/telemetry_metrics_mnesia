@@ -1,16 +1,16 @@
 defmodule TelemetryMetricsMnesia do
   @moduledoc """
-  `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
+  `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB.
 
   ## Installation
 
   Just add the reporter to your dependencies in `mix.exs`:
 
-    defp deps do
-      [
-        {:telemetry_metrics_mnesia, "~> 0.1.0"}
-      ]
-    end
+      defp deps do
+        [
+          {:telemetry_metrics_mnesia, "~> 0.1.0"}
+        ]
+      end
 
   ## Starting
 
@@ -53,12 +53,12 @@ defmodule TelemetryMetricsMnesia do
 
   <!-- tabs-close -->
 
-  ## How metrics stored
+  ## How metrics are stored
 
-  By default, raw events with timestamps are stored in `memory_only` tables in Mnesia DB without distribution. 
-  These options are going to be implemented soon...
+  By default, raw events with timestamps are stored in `memory_only` tables in Mnesia DB without distribution.
+  Distribution support will be implemented soon.
 
-  ## How metrics returned
+  ## How metrics are returned
 
   ### Single metric
   A `Map` with a metric type key.
@@ -66,45 +66,47 @@ defmodule TelemetryMetricsMnesia do
   #### `Counter`
 
   ```
-   %{"Counter" => 2}           
+   %{"Counter" => 2}
   ```
 
-  #### `Sum` 
+  #### `Sum`
 
   ```
-  %{"Sum" => 4}               
+  %{"Sum" => 4}
   ```
 
-  #### `last_value`   
+  #### `last_value`
 
   ```
   %{"LastValue" => 8}
   ```
 
-  #### `Distribution` 
+  #### `Distribution`
 
   ```
-  %{"Distribution" => %{      
+  %{
+    "Distribution" => %{
       median: 5,
-      p75: 6,     
-      p90: 6.5,   
-      p95: 6.6,   
-      p99: 6.6    
-    }            
+      p75: 6,
+      p90: 6.5,
+      p95: 6.6,
+      p99: 6.6
+    }
   }
   ```
 
-  #### `Summary` 
+  #### `Summary`
 
   ```
-   %{"Summary" => %{ 
-     mean: 5,               
-     median: 6,             
-     variance: 1,           
-     standard_diviation: 0.5,
-     count: 100             
-    }                       
-  }                         
+   %{
+     "Summary" => %{
+       mean: 5,
+       median: 6,
+       variance: 1,
+       standard_diviation: 0.5,
+       count: 100
+    }
+  }
   ```
 
   ### Several metric types at once
@@ -150,7 +152,7 @@ defmodule TelemetryMetricsMnesia do
   @type option() :: {:metrics, Telemetry.Metrics.t()}
 
   @typedoc """
-  See ["How metrics returned"](#module-how-metrics-returned)
+  See ["How metrics are returned"](#module-how-metrics-are-returned)
   """
   @type metric_data() :: %{String.t() => number() | map() | term()}
 
@@ -177,11 +179,11 @@ defmodule TelemetryMetricsMnesia do
   end
 
   @doc """
-  Retrieves metric data by its name. Returns a map. 
+  Retrieves metric data by its name. Returns a map.
 
   `opts` are reserved for future.
 
-  More info in ["How metrics returned"](#module-how-metrics-returned).
+  More info in ["How metrics are returned"](#module-how-metrics-are-returned).
   """
   @spec fetch(Metrics.metric_name(), %{}) :: metric_data()
   def fetch(metric_name, opts \\ %{}), do: GenServer.call(__MODULE__, {:fetch, metric_name, opts})
