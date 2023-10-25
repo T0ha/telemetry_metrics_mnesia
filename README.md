@@ -2,7 +2,7 @@
 
 [![CI Tests pass](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/push.yml/badge.svg)](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/push.yml)
 
-`Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
+`Telemetry.Metrics` reporter and metrics backend based on Mnesia DB.
 
 ## Features
 - Full compatibility with `Telemetry.Metrics` specification.
@@ -58,29 +58,29 @@ children = [
 Supervisor.start_link(children, ...)
 ```
 
-By default the reporter uses in-memory storage without distribution. 
+By default the reporter uses in-memory storage without distribution.
 
 ### Getting metrics values
-There is a unified API for retrieving metrics data. 
+There is a unified API for retrieving metrics data.
 Use `TelemetryMetricsMnesia.fetch(metric_name, opts)` to do it:
 
 ```elixir
 alias TelemetryMetricsMnesia, as: Metrics
 
 # Simple metrics
-%{"Counter" => request_count} = Metrics.fetch([:http, :request, :count])
-%{"Counter" => request_count_per_minute} = Metrics.fetch([:http, :request, :count], granularity: :minite)
+%{Telemetry.Metrics.Counter => request_count} = Metrics.fetch([:http, :request, :count])
+%{Telemetry.Metrics.Counter => request_count_per_minute} = Metrics.fetch([:http, :request, :count], granularity: :minite)
 
-%{"Sum" => total_requests_size} = Metrics.fetch([:http, :request, :payload_size])
-%{"Sum" => request_size_per_second} = Metrics.fetch([:http, :request, :count], granularity: :second)
+%{Telemetry.Metrics.Sum => total_requests_size} = Metrics.fetch([:http, :request, :payload_size])
+%{Telemetry.Metrics.Sum => request_size_per_second} = Metrics.fetch([:http, :request, :count], granularity: :second)
 
 
-%{"LastValue" => total_memory} = Metrics.fetch([:vm, :memory, :total])
+%{Telemetry.Metrics.LastValue => total_memory} = Metrics.fetch([:vm, :memory, :total])
 
 # Complex metrics
 
 %{
-    "Distribution" => %{
+    Telemetry.Metrics.Distribution => %{
         median: median,
         p75: p7_5,
         p90: p9_0,
@@ -90,7 +90,7 @@ alias TelemetryMetricsMnesia, as: Metrics
 } = TelemetryMetricsMnesia.fetch([:http, :request, :duration])
 
 %{
-    "Summary" => %{
+    Telemetry.Metrics.Summary => %{
         mean: avg,
         variance: var,
         standard_deviation: sd,
@@ -102,14 +102,14 @@ alias TelemetryMetricsMnesia, as: Metrics
 # Multiple metrics with the same name
 
 %{
-    "Distribution" => %{
+    Telemetry.Metrics.Distribution => %{
         median: median,
         p75: p7_5,
         p90: p9_0,
         p95: p9_5,
         p99: p99
     },
-    "Summary" => %{
+    Telemetry.Metrics.Summary => %{
         mean: avg,
         variance: var,
         standard_deviation: sd,
@@ -122,7 +122,7 @@ alias TelemetryMetricsMnesia, as: Metrics
 # Strated as `counter("http.request.count", tags: [:endpoint, :code])`
 
 %{
-    "Counter" => %{
+    Telemetry.Metrics.Counter => %{
         %{endpoint: "/", code: 200} => app_requests_success,
         %{endpoint: "/", code: 500} => app_requests_server_fail,
         %{endpoint: "/api", code: 200} => api_requests_success
