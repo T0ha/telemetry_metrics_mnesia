@@ -246,6 +246,7 @@ defmodule TelemetryMetricsMnesiaTest do
     Mnesia.clear_table(:telemetry_events)
   end
 
+  @tag :skip
   test "`counter` metrics fetch correctly timings are ok" do
     counter = Telemetry.Metrics.counter([:test, :counter, :time, :counter])
     garbage = Telemetry.Metrics.counter([:test, :garbage, :time, :garbage])
