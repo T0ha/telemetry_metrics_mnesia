@@ -190,7 +190,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      MIX_ENV: prod
+      MIX_ENV: dev
       HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
     steps:
