@@ -1,6 +1,12 @@
 defmodule TelemetryMetricsMnesiaTest do
-  # credo:disable-for-this-file
   use ExUnit.Case, async: false
+
+  # credo:disable-for-this-file
+  alias Telemetry.Metrics.Counter
+  alias Telemetry.Metrics.Distribution
+  alias Telemetry.Metrics.LastValue
+  alias Telemetry.Metrics.Sum
+  alias Telemetry.Metrics.Summary
 
   alias :mnesia, as: Mnesia
 
@@ -18,7 +24,7 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:rest, :counter], %{val: i, total: n}, %{count: false})
     end
 
-    assert %{"Counter" => ^n} =
+    assert %{Counter => n} =
              TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
 
     GenServer.stop(pid)
@@ -37,7 +43,7 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:rest, :last_value], %{val: i + n, total: n}, %{count: false})
     end
 
-    assert %{"LastValue" => out} =
+    assert %{LastValue => out} =
              TelemetryMetricsMnesia.fetch([:test, :last_value, :val])
 
     assert out == 2 * n
@@ -58,7 +64,7 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:rest, :sum], %{val: i, total: n}, %{count: false})
     end
 
-    assert %{"Sum" => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
+    assert %{Sum => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
     assert out == Enum.sum(1..n)
 
     GenServer.stop(pid)
@@ -78,7 +84,7 @@ defmodule TelemetryMetricsMnesiaTest do
     end
 
     assert %{
-             "Distribution" => %{
+             Distribution => %{
                median: median,
                p75: p75,
                p90: p90,
@@ -115,7 +121,7 @@ defmodule TelemetryMetricsMnesiaTest do
     end
 
     assert %{
-             "Summary" => %{
+             Summary => %{
                mean: avg,
                variance: var,
                standard_deviation: sd,
@@ -163,17 +169,17 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:test, :summary], %{val: i, total: n}, %{count: false})
     end
 
-    assert %{"Counter" => ^n} =
+    assert %{Counter => ^n} =
              TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
 
-    assert %{"LastValue" => ^n} =
+    assert %{LastValue => ^n} =
              TelemetryMetricsMnesia.fetch([:test, :last_value, :val])
 
-    assert %{"Sum" => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
+    assert %{Sum => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
     assert out == Enum.sum(1..n)
 
     assert %{
-             "Distribution" => %{
+             Distribution => %{
                median: _median,
                p75: _p7_5,
                p90: _p9_0,
@@ -183,7 +189,7 @@ defmodule TelemetryMetricsMnesiaTest do
            } = TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
 
     assert %{
-             "Summary" => %{
+             Summary => %{
                mean: _avg,
                variance: _var,
                standard_deviation: _sd,
@@ -213,17 +219,17 @@ defmodule TelemetryMetricsMnesiaTest do
       :telemetry.execute([:test], %{val: i, total: n}, %{count: true})
     end
 
-    assert %{"Counter" => ^n} =
+    assert %{Counter => ^n} =
              TelemetryMetricsMnesia.fetch([:test, :counter])
 
-    assert %{"LastValue" => ^n} =
+    assert %{LastValue => ^n} =
              TelemetryMetricsMnesia.fetch([:test, :val])
 
-    assert %{"Sum" => out} = TelemetryMetricsMnesia.fetch([:test, :val])
+    assert %{Sum => out} = TelemetryMetricsMnesia.fetch([:test, :val])
     assert out == Enum.sum(1..n)
 
     assert %{
-             "Distribution" => %{
+             Distribution => %{
                median: _median,
                p75: _p7_5,
                p90: _p9_0,
@@ -233,7 +239,7 @@ defmodule TelemetryMetricsMnesiaTest do
            } = TelemetryMetricsMnesia.fetch([:test, :val])
 
     assert %{
-             "Summary" => %{
+             Summary => %{
                mean: _avg,
                variance: _var,
                standard_deviation: _sd,
@@ -270,7 +276,7 @@ defmodule TelemetryMetricsMnesiaTest do
     assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 100
     assert Explorer.Series.quantile(times, 0.99) < 100
 
-    {t, %{"Counter" => _}} =
+    {t, %{Counter => _}} =
       :timer.tc(fn ->
         TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
       end)
@@ -295,7 +301,7 @@ defmodule TelemetryMetricsMnesiaTest do
     end
 
     assert %{
-             "Counter" => %{
+             Counter => %{
                %{count: true, other: 2} => ^n,
                %{count: false, other: 3} => ^n,
                %{count: true, other: 3} => ^n
@@ -323,7 +329,7 @@ defmodule TelemetryMetricsMnesiaTest do
     sum = Enum.sum(1..n)
 
     assert %{
-             "Sum" => %{
+             Sum => %{
                %{count: true, other: 2} => ^sum,
                %{count: false, other: 3} => ^sum,
                %{count: true, other: 3} => ^sum
@@ -349,7 +355,7 @@ defmodule TelemetryMetricsMnesiaTest do
     end
 
     assert %{
-             "LastValue" => %{
+             LastValue => %{
                %{count: true, other: 2} => ^n,
                %{count: false, other: 3} => ^n,
                %{count: true, other: 3} => ^n
@@ -395,7 +401,7 @@ defmodule TelemetryMetricsMnesiaTest do
     }
 
     assert %{
-             "Distribution" => %{
+             Distribution => %{
                %{count: true, other: 2} => ^out,
                %{count: false, other: 3} => ^out,
                %{count: true, other: 3} => ^out
@@ -443,7 +449,7 @@ defmodule TelemetryMetricsMnesiaTest do
     }
 
     assert %{
-             "Summary" => %{
+             Summary => %{
                %{count: true, other: 2} => ^out,
                %{count: false, other: 3} => ^out,
                %{count: true, other: 3} => ^out
