@@ -215,12 +215,11 @@ jobs:
             ./deps
             ./_build
 
-      - name: Semantic release
-        uses: brpaz/action-semantic-release@v1
-        with:
-          dry_run: "false"
-          install_plugins: "semantic-release-elixir"
-          branch: main
+      - name: Install Semantic Release
+        run:  npm install semantic-release @semantic-release/git @semantic-release/exec @semantic-release/changelog semantic-release-elixir
+
+      - name: Semantic Release
+        run: npx semantic-release
 
       - name: Release to Hex
         run: mix hex.publish --yes
