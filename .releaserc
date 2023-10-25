@@ -5,4 +5,4 @@ plugins:
   - "@semantic-release/release-notes-generator"
   - - "@semantic-release/exec"
     - prepareCmd: "echo ${nextRelease.version} > VERSION"
-    - publishCmd: "mix hex.publish --yes"
+      publishCmd: "mix hex.publish --yes"

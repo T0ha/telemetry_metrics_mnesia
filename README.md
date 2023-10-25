@@ -1,6 +1,6 @@
 # TelemetryMetricsMnesia
 
-[![Test](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/test.yml/badge.svg)](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/test.yml)
+[![CI Tests pass](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/push.yml/badge.svg)](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/push.yml)
 
 `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
 
