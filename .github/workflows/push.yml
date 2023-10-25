@@ -216,7 +216,7 @@ jobs:
             ./_build
 
       - name: Install Semantic Release
-        run:  npm install semantic-release @semantic-release/git @semantic-release/exec @semantic-release/changelog semantic-release-elixir
+        run:  npm install semantic-release @semantic-release/git @semantic-release/exec @semantic-release/changelog
 
       - name: Semantic Release
         run: npx semantic-release
