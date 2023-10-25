@@ -1,7 +1,10 @@
 defmodule TelemetryMetricsMnesia.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version (case File.read("VERSION") do
+    {:ok, version} -> String.trim(version)
+    {:error, _} -> "0.0.0-development"
+  end)
 
   def project do
     [
@@ -32,6 +35,7 @@ defmodule TelemetryMetricsMnesia.MixProject do
   defp package() do
     %{
       licenses: ["GPL-3.0-only"],
+      files: ["lib", "README.md", "mix.exs", "VERSION"],
       links: %{
         "GitHub" => "https://github.com/T0ha/telemetry_metrics_mnesia"
       }
