@@ -220,6 +220,3 @@ jobs:
 
       - name: Semantic Release
         run: npx semantic-release
-
-      - name: Release to Hex
-        run: mix hex.publish --yes
