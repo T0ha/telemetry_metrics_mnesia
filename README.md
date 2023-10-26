@@ -1,8 +1,9 @@
 # TelemetryMetricsMnesia
 
 [![CI Tests pass](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/push.yml/badge.svg)](https://github.com/t0ha/telemetry_metrics_mnesia/actions/workflows/push.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/telemetry_metrics_mnesia)](https://hex.pm/packages/telemetry_metrics_mnesia)
 
-`Telemetry.Metrics` reporter and metrics backend based on Mnesia DB.
+`Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
 
 ## Features
 - Full compatibility with `Telemetry.Metrics` specification.
