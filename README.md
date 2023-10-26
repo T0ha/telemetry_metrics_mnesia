@@ -31,6 +31,12 @@ To use it, start the reporter with the `start_link/1` function, providing it a l
 ```elixir
 import Telemetry.Metrics
 
+alias Telemetry.Metrics.Counter
+alias Telemetry.Metrics.Distribution
+alias Telemetry.Metrics.LastValue
+alias Telemetry.Metrics.Sum
+alias Telemetry.Metrics.Summary
+
 TelemetryMetricsMnesia.start_link(
   metrics: [
     counter("http.request.count"),
@@ -68,19 +74,19 @@ Use `TelemetryMetricsMnesia.fetch(metric_name, opts)` to do it:
 alias TelemetryMetricsMnesia, as: Metrics
 
 # Simple metrics
-%{Telemetry.Metrics.Counter => request_count} = Metrics.fetch([:http, :request, :count])
-%{Telemetry.Metrics.Counter => request_count_per_minute} = Metrics.fetch([:http, :request, :count], granularity: :minite)
+%{Counter => request_count} = Metrics.fetch([:http, :request, :count])
+%{Counter => request_count_per_minute} = Metrics.fetch([:http, :request, :count], granularity: :minite)
 
-%{Telemetry.Metrics.Sum => total_requests_size} = Metrics.fetch([:http, :request, :payload_size])
-%{Telemetry.Metrics.Sum => request_size_per_second} = Metrics.fetch([:http, :request, :count], granularity: :second)
+%{Sum => total_requests_size} = Metrics.fetch([:http, :request, :payload_size])
+%{Sum => request_size_per_second} = Metrics.fetch([:http, :request, :count], granularity: :second)
 
 
-%{Telemetry.Metrics.LastValue => total_memory} = Metrics.fetch([:vm, :memory, :total])
+%{LastValue => total_memory} = Metrics.fetch([:vm, :memory, :total])
 
 # Complex metrics
 
 %{
-    Telemetry.Metrics.Distribution => %{
+    Distribution => %{
         median: median,
         p75: p7_5,
         p90: p9_0,
@@ -90,7 +96,7 @@ alias TelemetryMetricsMnesia, as: Metrics
 } = TelemetryMetricsMnesia.fetch([:http, :request, :duration])
 
 %{
-    Telemetry.Metrics.Summary => %{
+    Summary => %{
         mean: avg,
         variance: var,
         standard_deviation: sd,
@@ -102,14 +108,14 @@ alias TelemetryMetricsMnesia, as: Metrics
 # Multiple metrics with the same name
 
 %{
-    Telemetry.Metrics.Distribution => %{
+    Distribution => %{
         median: median,
         p75: p7_5,
         p90: p9_0,
         p95: p9_5,
         p99: p99
     },
-    Telemetry.Metrics.Summary => %{
+    Summary => %{
         mean: avg,
         variance: var,
         standard_deviation: sd,
@@ -122,7 +128,7 @@ alias TelemetryMetricsMnesia, as: Metrics
 # Strated as `counter("http.request.count", tags: [:endpoint, :code])`
 
 %{
-    Telemetry.Metrics.Counter => %{
+    Counter => %{
         %{endpoint: "/", code: 200} => app_requests_success,
         %{endpoint: "/", code: 500} => app_requests_server_fail,
         %{endpoint: "/api", code: 200} => api_requests_success
