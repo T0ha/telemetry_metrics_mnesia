@@ -84,7 +84,7 @@ defmodule TelemetryMetricsMnesia.Db do
       {
         telemetry_events(key: {:"$1", event_name}, metadata: :"$2"),
         [],
-        [:"$2"]
+        [{{%{}, :"$2"}}]
       }
     ]
   end
@@ -127,37 +127,20 @@ defmodule TelemetryMetricsMnesia.Db do
 
   defp events_reducer_fun(%Counter{tags: []}), do: fn _, acc -> acc + 1 end
 
-  defp events_reducer_fun(%Counter{tags: tags}) do
-    fn metadata, acc ->
-      tag_values = Map.take(metadata, tags)
-      val = Map.get(acc, tag_values, 0)
-      Map.put(acc, tag_values, val + 1)
-    end
+  defp events_reducer_fun(%Counter{} = metric) do
+    update_tagged_metric(metric, 0, fn _, acc -> acc + 1 end)
   end
 
   defp events_reducer_fun(%Sum{tags: []}), do: &Kernel.+/2
 
-  defp events_reducer_fun(%Sum{name: name, tags: tags}) do
-    key = List.last(name)
-
-    fn {measurements, metadata}, acc ->
-      tag_values = Map.take(metadata, tags)
-      val = Map.get(acc, tag_values, 0)
-      measurement = Map.get(measurements, key, 0)
-      Map.put(acc, tag_values, val + measurement)
-    end
+  defp events_reducer_fun(%Sum{} = metric) do
+    update_tagged_metric(metric, 0, &Kernel.+/2)
   end
 
   defp events_reducer_fun(%LastValue{tags: []}), do: fn v, _acc -> v end
 
-  defp events_reducer_fun(%LastValue{name: name, tags: tags}) do
-    key = List.last(name)
-
-    fn {measurements, metadata}, acc ->
-      tag_values = Map.take(metadata, tags)
-      measurement = Map.get(measurements, key, 0)
-      Map.put(acc, tag_values, measurement)
-    end
+  defp events_reducer_fun(%LastValue{} = metric) do
+    update_tagged_metric(metric, 0, fn v, _acc -> v end)
   end
 
   defp events_reducer_fun(%mod{tags: []}) when mod in [Distribution, Summary] do
@@ -166,15 +149,8 @@ defmodule TelemetryMetricsMnesia.Db do
     end
   end
 
-  defp events_reducer_fun(%mod{name: name, tags: tags}) when mod in [Distribution, Summary] do
-    key = List.last(name)
-
-    fn {measurements, metadata}, acc ->
-      tag_values = Map.take(metadata, tags)
-      other = Map.get(acc, tag_values, [])
-      measurement = Map.get(measurements, key, 0)
-      Map.put(acc, tag_values, [measurement | other])
-    end
+  defp events_reducer_fun(%mod{} = metric) when mod in [Distribution, Summary] do
+    update_tagged_metric(metric, [], &[&1 | &2])
   end
 
   defp stat_fun(Distribution), do: &distribution/1
@@ -206,5 +182,21 @@ defmodule TelemetryMetricsMnesia.Db do
       p95: Explorer.Series.quantile(metrics, 0.95),
       p99: Explorer.Series.quantile(metrics, 0.99)
     }
+  end
+
+  defp update_tagged_metric(metric, default, update_fun) do
+    key = List.last(metric.name)
+
+    fn {measurements, metadata}, acc ->
+      tag_values = extract_tags(metric, metadata)
+      old = Map.get(acc, tag_values, default)
+      measurement = Map.get(measurements, key, 0)
+      Map.put(acc, tag_values, update_fun.(measurement, old))
+    end
+  end
+
+  defp extract_tags(metric, metadata) do
+    tag_values = metric.tag_values.(metadata)
+    Map.take(tag_values, metric.tags)
   end
 end
