@@ -314,16 +314,21 @@ defmodule TelemetryMetricsMnesiaTest do
   end
 
   test "`counter` metrics works with tags and custom tag_values" do
-    tag_values = fn metadata -> 
+    tag_values = fn metadata ->
       case metadata.count do
-        true -> 
-          %{metadata| other: metadata.other + 1}
+        true ->
+          %{metadata | other: metadata.other + 1}
+
         _ ->
           metadata
       end
     end
 
-    counter = Telemetry.Metrics.counter([:test, :counter, :counter], tags: [:count, :other], tag_values: tag_values)
+    counter =
+      Telemetry.Metrics.counter([:test, :counter, :counter],
+        tags: [:count, :other],
+        tag_values: tag_values
+      )
 
     {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
 
@@ -347,7 +352,6 @@ defmodule TelemetryMetricsMnesiaTest do
     GenServer.stop(pid)
     Mnesia.clear_table(:telemetry_events)
   end
-
 
   test "`sum` metrics works with tags" do
     sum = Telemetry.Metrics.sum([:test, :sum, :val], tags: [:count, :other])
