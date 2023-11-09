@@ -36,9 +36,9 @@ defmodule TelemetryMetricsMnesia do
   ### From supervisor
 
   ```elixir
-  import Telemetry.Metrics
+   import Telemetry.Metrics
 
-  children = [
+   children = [
     {TelemetryMetricsMnesia, [
       metrics: [
         counter("http.request.count"),
@@ -62,29 +62,32 @@ defmodule TelemetryMetricsMnesia do
   ## How metrics are returned
 
   ### Single metric
-  A `Map` with a metric type key.
+  A `Map` with a metric type key. You can specify exact metric type to get value only.
 
   #### `Counter`
 
-  ```
-   %{Telemetry.Metrics.Counter => 2}
+  ```elixir
+  %{Telemetry.Metrics.Counter => 2} = TelemetryMetricsMnesia.fetch([:some, :metric])
+   2 = TelemetryMetricsMnesia.fetch([:some, :metric], type: Telemetry.Metrics.Counter)
   ```
 
   #### `Sum`
 
-  ```
-  %{Telemetry.Metrics.Sum => 4}
+  ```elixir
+  %{Telemetry.Metrics.Sum => 4} = TelemetryMetricsMnesia.fetch([:some, :metric])
+   4 = TelemetryMetricsMnesia.fetch([:some, :metric], type: Telemetry.Metrics.Sum)
   ```
 
   #### `LastValue`
 
-  ```
-  %{Telemetry.Metrics.LastValue => 8}
+  ```elixir
+  %{Telemetry.Metrics.LastValue => 8} = TelemetryMetricsMnesia.fetch([:some, :metric])
+   8 = TelemetryMetricsMnesia.fetch([:some, :metric], type: Telemetry.Metrics.LastValue)
   ```
 
   #### `Distribution`
 
-  ```
+  ```elixir
   %{Telemetry.Metrics.Distribution => %{
       median: 5,
       p75: 6,
@@ -92,20 +95,36 @@ defmodule TelemetryMetricsMnesia do
       p95: 6.6,
       p99: 6.6
     }
-  }
+  } = TelemetryMetricsMnesia.fetch([:some, :metric])
+
+  %{
+    median: 5,
+    p75: 6,
+    p90: 6.5,
+    p95: 6.6,
+    p99: 6.6
+  } = TelemetryMetricsMnesia.fetch([:some, :metric], type: Telemetry.Metrics.Distribution)
   ```
 
   #### `Summary`
 
-  ```
+  ```elixir
    %{Telemetry.Metrics.Summary => %{
+       mean: 5,
+       median: 6,
+       variance: 1,
+       standard_diviation: 0.5,
+       count: 100
+      }
+    } = TelemetryMetricsMnesia.fetch([:some, :metric])
+
+   %{
      mean: 5,
      median: 6,
      variance: 1,
      standard_diviation: 0.5,
      count: 100
-    }
-  }
+    } = TelemetryMetricsMnesia.fetch([:some, :metric], type: Telemetry.Metrics.Summary)
   ```
 
   ### Several metric types at once
@@ -127,19 +146,25 @@ defmodule TelemetryMetricsMnesia do
       median: 5,
       count: 100
     }
-  }
+  } = TelemetryMetricsMnesia.fetch([:some, :metric])
   ```
 
   ### Metric with tags
   A nested `Map` with metric type keys at the first level and maps with tags vs values at the second.
   ```elixir
   %{
-      Telemetry.Metrics.Counter => %{
-          %{endpoint: "/", code: 200} => 10,
-          %{endpoint: "/", code: 500} => 100,
-          %{endpoint: "/api", code: 200} => 500
-      }
-  }
+    Telemetry.Metrics.Counter => %{
+      %{endpoint: "/", code: 200} => 10,
+      %{endpoint: "/", code: 500} => 100,
+      %{endpoint: "/api", code: 200} => 500
+    }
+  } = TelemetryMetricsMnesia.fetch([:some, :metric])
+
+  %{
+    %{endpoint: "/", code: 200} => 10,
+    %{endpoint: "/", code: 500} => 100,
+    %{endpoint: "/api", code: 200} => 500
+  } = TelemetryMetricsMnesia.fetch([:some, :metric], type: Telemetry.Metrics.Counter)
   ```
   """
 
@@ -208,19 +233,26 @@ defmodule TelemetryMetricsMnesia do
   @doc """
   Retrieves metric data by its name. Returns a map.
 
-  `opts` are reserved for future.
+  `opts` are:
+   - `type` allows to get raw metric data for exact Telemetry.Metrics type module.
 
   More info in ["How metrics are returned"](#module-how-metrics-are-returned).
   """
   @spec fetch(Metrics.metric_name(), %{}) :: metric_data()
-  def fetch(metric_name, opts \\ %{}), do: GenServer.call(__MODULE__, {:fetch, metric_name, opts})
+  def fetch(metric_name, opts \\ %{})
+  def fetch(metric_name, opts) when is_list(opts), do: fetch(metric_name, Map.new(opts))
+  def fetch(metric_name, %{} = opts), do: GenServer.call(__MODULE__, {:fetch, metric_name, opts})
 
   @impl true
-  def handle_call({:fetch, metric_name, _opts}, _from, %{metrics: metrics} = state) do
+  def handle_call({:fetch, metric_name, opts}, _from, %{metrics: metrics} = state) do
     reply =
-      for %mod{} = metric <- metrics, metric.name == metric_name, into: %{} do
+      for %mod{} = metric <- metrics,
+          metric.name == metric_name,
+          check_type(mod, opts),
+          into: %{} do
         {mod, Db.fetch(metric)}
       end
+      |> maybe_extract_type(opts)
 
     {:reply, reply, state}
   end
@@ -231,4 +263,10 @@ defmodule TelemetryMetricsMnesia do
 
     :ok
   end
+
+  defp check_type(mod, %{type: type}), do: mod == type
+  defp check_type(_mod, _opts), do: true
+
+  defp maybe_extract_type(map, %{type: type}), do: Map.get(map, type)
+  defp maybe_extract_type(map, _opts), do: map
 end

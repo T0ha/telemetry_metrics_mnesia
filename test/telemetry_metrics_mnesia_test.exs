@@ -13,77 +13,28 @@ defmodule TelemetryMetricsMnesiaTest do
   doctest TelemetryMetricsMnesia
 
   describe "metrics without tags works correctly" do
-    test "`counter`" do
-      counter = Telemetry.Metrics.counter([:test, :counter, :counter])
+    setup [:init_metrics, :generate_data]
 
-      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
-
-      n = :rand.uniform(10_000)
-
-      for i <- 1..n do
-        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true})
-        :telemetry.execute([:rest, :counter], %{val: i, total: n}, %{count: false})
-      end
-
-      assert %{Counter => n} =
-               TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
-
-      GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+    @tag metric: :counter
+    test "`counter`", %{n: n} do
+      assert %{Counter => 3 * n} ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :val])
     end
 
-    test "`last_value`" do
-      metrics = Telemetry.Metrics.last_value([:test, :last_value, :val])
-
-      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [metrics])
-
-      n = :rand.uniform(10_000)
-
-      for i <- 1..n do
-        :telemetry.execute([:test, :last_value], %{val: i + n, total: n}, %{count: true})
-        :telemetry.execute([:rest, :last_value], %{val: i + n, total: n}, %{count: false})
-      end
-
-      assert %{LastValue => out} =
+    @tag metric: :last_value
+    test "`last_value`", %{n: n} do
+      assert %{LastValue => ^n} =
                TelemetryMetricsMnesia.fetch([:test, :last_value, :val])
-
-      assert out == 2 * n
-
-      GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
     end
 
-    test "`sum`" do
-      metrics = Telemetry.Metrics.sum([:test, :sum, :val])
-
-      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [metrics])
-
-      n = :rand.uniform(10_000)
-
-      for i <- 1..n do
-        :telemetry.execute([:test, :sum], %{val: i, total: n}, %{count: true})
-        :telemetry.execute([:rest, :sum], %{val: i, total: n}, %{count: false})
-      end
-
+    @tag metric: :sum
+    test "`sum`", %{n: n} do
       assert %{Sum => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
-      assert out == Enum.sum(1..n)
-
-      GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      assert out == Enum.sum(1..n) * 3
     end
 
-    test "`distribution`" do
-      metrics = Telemetry.Metrics.distribution([:test, :distribution, :val])
-
-      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [metrics])
-
-      n = :rand.uniform(10_000)
-
-      for i <- 1..n do
-        :telemetry.execute([:test, :distribution], %{val: i, total: n}, %{count: true})
-        :telemetry.execute([:rest, :distribution], %{val: i, total: n}, %{count: false})
-      end
-
+    @tag metric: :distribution
+    test "`distribution`", %{n: n} do
       assert %{
                Distribution => %{
                  median: median,
@@ -104,23 +55,10 @@ defmodule TelemetryMetricsMnesiaTest do
       assert p90 == Explorer.Series.quantile(series, 0.9)
       assert p95 == Explorer.Series.quantile(series, 0.95)
       assert p99 == Explorer.Series.quantile(series, 0.99)
-
-      GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
     end
 
-    test "`summary`" do
-      metrics = Telemetry.Metrics.summary([:test, :summary, :val])
-
-      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [metrics])
-
-      n = :rand.uniform(10_000)
-
-      for i <- 1..n do
-        :telemetry.execute([:test, :summary], %{val: i, total: n}, %{count: true})
-        :telemetry.execute([:rest, :summary], %{val: i, total: n}, %{count: false})
-      end
-
+    @tag metric: :summary
+    test "`summary`", %{n: n} do
       assert %{
                Summary => %{
                  mean: avg,
@@ -133,20 +71,19 @@ defmodule TelemetryMetricsMnesiaTest do
 
       assert avg == Enum.sum(1..n) / n
 
-      assert sd ==
-               1..n
-               |> Enum.to_list()
-               |> Explorer.Series.from_list()
-               |> Explorer.Series.standard_deviation()
+      series =
+        1..n
+        |> Enum.to_list()
+        |> List.duplicate(3)
+        |> List.flatten()
+        |> Explorer.Series.from_list()
 
-      assert var ==
-               1..n |> Enum.to_list() |> Explorer.Series.from_list() |> Explorer.Series.variance()
+      assert sd == Explorer.Series.standard_deviation(series)
 
-      assert count == n
+      assert var == Explorer.Series.variance(series)
+
+      assert count == n * 3
       assert median == (n + 1) / 2
-
-      GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
     end
   end
 
@@ -506,5 +443,45 @@ defmodule TelemetryMetricsMnesiaTest do
       GenServer.stop(pid)
       Mnesia.clear_table(:telemetry_events)
     end
+  end
+
+  describe "fetch/2 with additional options" do
+    setup [:init_metrics, :generate_data]
+
+    @tag metric: :counter
+    test "`type` option", %{n: n} do
+      assert n * 3 ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :val],
+                 type: Telemetry.Metrics.Counter, test: 1
+               )
+    end
+  end
+
+  defp init_metrics(context) do
+    opts = Map.get(context, :opts, [])
+    metric = apply(Telemetry.Metrics, context[:metric], [[:test, context[:metric], :val], opts])
+
+    {:ok, _pid} = TelemetryMetricsMnesia.start_link(metrics: [metric])
+
+    on_exit(fn ->
+      Mnesia.clear_table(:telemetry_events)
+    end)
+
+    :ok
+  end
+
+  defp generate_data(context) do
+    n = :rand.uniform(10_000)
+
+    for i <- 1..n do
+      :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{count: true, other: 2})
+
+      :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{count: false, other: 3})
+
+      :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{count: true, other: 3})
+      :telemetry.execute([:rest, context[:metric]], %{val: i, total: n}, %{count: true, other: 3})
+    end
+
+    {:ok, %{n: n}}
   end
 end
