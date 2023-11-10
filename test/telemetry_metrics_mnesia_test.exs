@@ -452,7 +452,8 @@ defmodule TelemetryMetricsMnesiaTest do
     test "`type` option", %{n: n} do
       assert n * 3 ==
                TelemetryMetricsMnesia.fetch([:test, :counter, :val],
-                 type: Telemetry.Metrics.Counter, test: 1
+                 type: Telemetry.Metrics.Counter,
+                 test: 1
                )
     end
 
@@ -460,11 +461,10 @@ defmodule TelemetryMetricsMnesiaTest do
     test "`granularity` metric reporter option", %{n: n} do
       assert n * 3 >
                TelemetryMetricsMnesia.fetch([:test, :counter, :val],
-                 type: Telemetry.Metrics.Counter, test: 1
+                 type: Telemetry.Metrics.Counter,
+                 test: 1
                )
     end
-
-
   end
 
   defp init_metrics(context) do

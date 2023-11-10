@@ -45,7 +45,6 @@ defmodule TelemetryMetricsMnesia.Db do
   def fetch(%_{tags: []} = metric) do
     metric
     |> fetch_events()
-    |> IO.inspect()
     |> reduce_events(metric, events_reducer_fun(metric), 0)
   end
 
@@ -115,7 +114,7 @@ defmodule TelemetryMetricsMnesia.Db do
   defp build_match_guards(%_{reporter_options: opts}) do
     case Keyword.get(opts, :granularity) do
       [{unit, amount}] ->
-        multiplier = 
+        multiplier =
           case unit do
             :microseconds -> 1
             :milliseconds -> 1000
@@ -129,10 +128,11 @@ defmodule TelemetryMetricsMnesia.Db do
 
         [{:>, :"$1", timestamp - amount * multiplier}]
 
-      _ -> 
+      _ ->
         []
     end
   end
+
   defp build_match_guards(_), do: []
 
   def reduce_events(events, metric, reducer, acc \\ %{})
