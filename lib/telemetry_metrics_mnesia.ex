@@ -52,6 +52,9 @@ defmodule TelemetryMetricsMnesia do
   ```
 
   <!-- tabs-close -->
+  
+  There are a couple `reporter_options` you can use:
+  - `granularity: [unit: amount]` - sets metric calculation timespan. By default, infinity (it uses all available data).
 
   ## How metrics are stored
 
@@ -192,7 +195,7 @@ defmodule TelemetryMetricsMnesia do
         }
 
   @type tagged_metrics(inner_type) :: %{
-          (tag :: term()) => inner_type
+          (tag :: map()) => inner_type
         }
 
   @typedoc """

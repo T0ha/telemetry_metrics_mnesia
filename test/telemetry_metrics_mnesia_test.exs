@@ -455,6 +455,16 @@ defmodule TelemetryMetricsMnesiaTest do
                  type: Telemetry.Metrics.Counter, test: 1
                )
     end
+
+    @tag metric: :counter, opts: [reporter_options: [granularity: [milliseconds: 100]]]
+    test "`granularity` metric reporter option", %{n: n} do
+      assert n * 3 >
+               TelemetryMetricsMnesia.fetch([:test, :counter, :val],
+                 type: Telemetry.Metrics.Counter, test: 1
+               )
+    end
+
+
   end
 
   defp init_metrics(context) do
