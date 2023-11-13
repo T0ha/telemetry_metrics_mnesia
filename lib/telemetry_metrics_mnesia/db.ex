@@ -79,33 +79,33 @@ defmodule TelemetryMetricsMnesia.Db do
     ]
   end
 
-  defp build_match_expression(%Counter{event_name: event_name, tags: _}) do
+  defp build_match_expression(%Counter{event_name: event_name, tags: _} = metric) do
     [
       {
         telemetry_events(key: {:"$1", event_name}, metadata: :"$2"),
-        [],
+        build_match_guards(metric),
         [{{%{}, :"$2"}}]
       }
     ]
   end
 
-  defp build_match_expression(%_{name: name, event_name: event_name, tags: []}) do
+  defp build_match_expression(%_{name: name, event_name: event_name, tags: []} = metric) do
     key = List.last(name)
 
     [
       {
         telemetry_events(key: {:"$1", event_name}, measurements: %{key => :"$2"}),
-        [],
+        build_match_guards(metric),
         [:"$2"]
       }
     ]
   end
 
-  defp build_match_expression(%_{event_name: event_name, tags: _}) do
+  defp build_match_expression(%_{event_name: event_name, tags: _} = metric) do
     [
       {
         telemetry_events(key: {:"$1", event_name}, measurements: :"$2", metadata: :"$3"),
-        [],
+        build_match_guards(metric),
         [{{:"$2", :"$3"}}]
       }
     ]

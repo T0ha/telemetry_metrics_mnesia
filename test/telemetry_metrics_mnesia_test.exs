@@ -17,7 +17,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
     @tag metric: :counter
     test "`counter`", %{n: n} do
-      assert %{Counter => 3 * n} ==
+      assert %{Counter => n} ==
                TelemetryMetricsMnesia.fetch([:test, :counter, :val])
     end
 
@@ -30,60 +30,23 @@ defmodule TelemetryMetricsMnesiaTest do
     @tag metric: :sum
     test "`sum`", %{n: n} do
       assert %{Sum => out} = TelemetryMetricsMnesia.fetch([:test, :sum, :val])
-      assert out == Enum.sum(1..n) * 3
+      assert out == Enum.sum(1..n)
     end
 
     @tag metric: :distribution
     test "`distribution`", %{n: n} do
+      expected = distribution(n)
+
       assert %{
-               Distribution => %{
-                 median: median,
-                 p75: p75,
-                 p90: p90,
-                 p95: p95,
-                 p99: p99
-               }
-             } = TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
-
-      series =
-        1..n
-        |> Enum.to_list()
-        |> Explorer.Series.from_list()
-
-      assert median == Explorer.Series.median(series)
-      assert p75 == Explorer.Series.quantile(series, 0.75)
-      assert p90 == Explorer.Series.quantile(series, 0.9)
-      assert p95 == Explorer.Series.quantile(series, 0.95)
-      assert p99 == Explorer.Series.quantile(series, 0.99)
+               Distribution => expected
+             } == TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
     end
 
     @tag metric: :summary
     test "`summary`", %{n: n} do
       assert %{
-               Summary => %{
-                 mean: avg,
-                 variance: var,
-                 standard_deviation: sd,
-                 median: median,
-                 count: count
-               }
-             } = TelemetryMetricsMnesia.fetch([:test, :summary, :val])
-
-      assert avg == Enum.sum(1..n) / n
-
-      series =
-        1..n
-        |> Enum.to_list()
-        |> List.duplicate(3)
-        |> List.flatten()
-        |> Explorer.Series.from_list()
-
-      assert sd == Explorer.Series.standard_deviation(series)
-
-      assert var == Explorer.Series.variance(series)
-
-      assert count == n * 3
-      assert median == (n + 1) / 2
+               Summary => summary(n)
+             } == TelemetryMetricsMnesia.fetch([:test, :summary, :val])
     end
   end
 
@@ -119,24 +82,12 @@ defmodule TelemetryMetricsMnesiaTest do
       assert out == Enum.sum(1..n)
 
       assert %{
-               Distribution => %{
-                 median: _median,
-                 p75: _p7_5,
-                 p90: _p9_0,
-                 p95: _p9_5,
-                 p99: _p99
-               }
-             } = TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
+               Distribution => distribution(n)
+             } == TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
 
       assert %{
-               Summary => %{
-                 mean: _avg,
-                 variance: _var,
-                 standard_deviation: _sd,
-                 median: _median,
-                 count: _count
-               }
-             } = TelemetryMetricsMnesia.fetch([:test, :summary, :val])
+               Summary => summary(n)
+             } == TelemetryMetricsMnesia.fetch([:test, :summary, :val])
 
       GenServer.stop(pid)
       Mnesia.clear_table(:telemetry_events)
@@ -168,24 +119,16 @@ defmodule TelemetryMetricsMnesiaTest do
       assert %{Sum => out} = TelemetryMetricsMnesia.fetch([:test, :val])
       assert out == Enum.sum(1..n)
 
-      assert %{
-               Distribution => %{
-                 median: _median,
-                 p75: _p7_5,
-                 p90: _p9_0,
-                 p95: _p9_5,
-                 p99: _p99
-               }
-             } = TelemetryMetricsMnesia.fetch([:test, :val])
+      distribution = distribution(n)
 
       assert %{
-               Summary => %{
-                 mean: _avg,
-                 variance: _var,
-                 standard_deviation: _sd,
-                 median: _median,
-                 count: _count
-               }
+               Distribution => ^distribution
+             } = TelemetryMetricsMnesia.fetch([:test, :val])
+
+      summary = summary(n)
+
+      assert %{
+               Summary => ^summary
              } = TelemetryMetricsMnesia.fetch([:test, :val])
 
       GenServer.stop(pid)
@@ -450,20 +393,80 @@ defmodule TelemetryMetricsMnesiaTest do
 
     @tag metric: :counter
     test "`type` option", %{n: n} do
-      assert n * 3 ==
+      assert n ==
                TelemetryMetricsMnesia.fetch([:test, :counter, :val],
                  type: Telemetry.Metrics.Counter,
                  test: 1
                )
     end
+  end
 
-    @tag metric: :counter, opts: [reporter_options: [granularity: [milliseconds: 100]]]
-    test "`granularity` metric reporter option", %{n: n} do
+  describe "`granularity` metric reporter option" do
+    setup [:init_metrics, :generate_data]
+
+    @tag metric: :counter,
+         duplicate: 3,
+         opts: [reporter_options: [granularity: [milliseconds: 10]]]
+    test "`counter`", %{n: n, metric: metric} do
       assert n * 3 >
-               TelemetryMetricsMnesia.fetch([:test, :counter, :val],
+               TelemetryMetricsMnesia.fetch([:test, metric, :val],
                  type: Telemetry.Metrics.Counter,
                  test: 1
                )
+    end
+
+    @tag metric: :sum, duplicate: 3, opts: [reporter_options: [granularity: [milliseconds: 10]]]
+    test "`sum`", %{n: n, metric: metric} do
+      assert Enum.sum(1..n) * 3 >
+               TelemetryMetricsMnesia.fetch([:test, metric, :val],
+                 type: Telemetry.Metrics.Sum,
+                 test: 1
+               )
+    end
+
+    @tag metric: :last_value,
+         duplicate: 3,
+         opts: [reporter_options: [granularity: [milliseconds: 10]]]
+    test "`last_value`", %{n: n, metric: metric} do
+      assert n ==
+               TelemetryMetricsMnesia.fetch([:test, metric, :val],
+                 type: Telemetry.Metrics.LastValue,
+                 test: 1
+               )
+    end
+
+    @tag metric: :distribution,
+         duplicate: 3,
+         opts: [reporter_options: [granularity: [milliseconds: 10]]]
+    test "`distribution`", %{n: n, metric: metric} do
+      expected = distribution(n * 3)
+
+      result =
+        TelemetryMetricsMnesia.fetch([:test, metric, :val],
+          type: Telemetry.Metrics.Distribution,
+          test: 1
+        )
+
+      for k <- Map.keys(expected) do
+        assert expected[k] > result[k]
+      end
+    end
+
+    @tag metric: :summary,
+         duplicate: 3,
+         opts: [reporter_options: [granularity: [milliseconds: 10]]]
+    test "`summary`", %{n: n, metric: metric} do
+      expected = summary(n * 3)
+
+      result =
+        TelemetryMetricsMnesia.fetch([:test, metric, :val],
+          type: Telemetry.Metrics.Summary,
+          test: 1
+        )
+
+      for k <- Map.keys(expected) do
+        assert expected[k] > result[k]
+      end
     end
   end
 
@@ -484,14 +487,55 @@ defmodule TelemetryMetricsMnesiaTest do
     n = :rand.uniform(10_000)
 
     for i <- 1..n do
-      :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{count: true, other: 2})
+      for _ <- 1..Map.get(context, :duplicate, 1) do
+        :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{
+          count: true,
+          other: 2
+        })
+      end
 
-      :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{count: false, other: 3})
-
-      :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{count: true, other: 3})
       :telemetry.execute([:rest, context[:metric]], %{val: i, total: n}, %{count: true, other: 3})
     end
 
     {:ok, %{n: n}}
+  end
+
+  defp distribution(n) do
+    series =
+      1..n
+      |> Enum.to_list()
+      |> Explorer.Series.from_list(dtype: :float)
+
+    %{
+      median: Explorer.Series.median(series),
+      p75: Explorer.Series.quantile(series, 0.75),
+      p90: Explorer.Series.quantile(series, 0.9),
+      p95: Explorer.Series.quantile(series, 0.95),
+      p99: Explorer.Series.quantile(series, 0.99)
+    }
+  end
+
+  defp summary(n) do
+    series =
+      1..n
+      |> Enum.to_list()
+      |> List.flatten()
+      |> Explorer.Series.from_list()
+
+    avg = Enum.sum(1..n) / n
+    sd = Explorer.Series.standard_deviation(series)
+
+    var = Explorer.Series.variance(series)
+
+    count = n
+    median = (n + 1) / 2
+
+    %{
+      mean: avg,
+      variance: var,
+      standard_deviation: sd,
+      median: median,
+      count: count
+    }
   end
 end
