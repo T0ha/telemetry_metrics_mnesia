@@ -42,16 +42,19 @@ defmodule TelemetryMetricsMnesia.Db do
     )
   end
 
-  def fetch(%_{tags: []} = metric) do
-    metric
-    |> fetch_events()
-    |> reduce_events(metric, events_reducer_fun(metric), 0)
-  end
+  def fetch(%_{tags: tags, keep: keep} = metric) do
+    default = 
+      case tags do
+        [] -> 
+          0
+        _ ->
+          %{}
+      end
 
-  def fetch(%_{tags: _} = metric) do
     metric
     |> fetch_events()
-    |> reduce_events(metric, events_reducer_fun(metric))
+    |> Enum.filter(&(keep?(&1, keep)))
+    |> reduce_events(metric, events_reducer_fun(metric), default)
   end
 
   def fetch(_), do: :notimpl
@@ -69,17 +72,7 @@ defmodule TelemetryMetricsMnesia.Db do
     end
   end
 
-  defp build_match_expression(%Counter{event_name: event_name, tags: []} = metric) do
-    [
-      {
-        telemetry_events(key: {:"$1", event_name}),
-        build_match_guards(metric),
-        [:_]
-      }
-    ]
-  end
-
-  defp build_match_expression(%Counter{event_name: event_name, tags: _} = metric) do
+  defp build_match_expression(%Counter{event_name: event_name} = metric) do
     [
       {
         telemetry_events(key: {:"$1", event_name}, metadata: :"$2"),
@@ -89,22 +82,12 @@ defmodule TelemetryMetricsMnesia.Db do
     ]
   end
 
-  defp build_match_expression(%_{name: name, event_name: event_name, tags: []} = metric) do
+  defp build_match_expression(%_{name: name, event_name: event_name} = metric) do
     key = List.last(name)
 
     [
       {
-        telemetry_events(key: {:"$1", event_name}, measurements: %{key => :"$2"}),
-        build_match_guards(metric),
-        [:"$2"]
-      }
-    ]
-  end
-
-  defp build_match_expression(%_{event_name: event_name, tags: _} = metric) do
-    [
-      {
-        telemetry_events(key: {:"$1", event_name}, measurements: :"$2", metadata: :"$3"),
+        telemetry_events(key: {:"$1", event_name}, measurements: %{key => :"$2"}, metadata: :"$3"),
         build_match_guards(metric),
         [{{:"$2", :"$3"}}]
       }
@@ -137,14 +120,16 @@ defmodule TelemetryMetricsMnesia.Db do
 
   def reduce_events(events, metric, reducer, acc \\ %{})
 
-  def reduce_events(events, %mod{tags: []}, reducer, acc) when mod in [Distribution, Summary] do
-    reducer.(events, acc)
-  end
-
-  def reduce_events(events, %mod{tags: _}, reducer, acc) when mod in [Distribution, Summary] do
+  def reduce_events(events, %mod{tags: _}, reducer, _acc) when mod in [Distribution, Summary] do
     events
-    |> Enum.reduce(acc, reducer)
+    |> Enum.reduce(%{}, reducer)
     |> Map.new(stat_fun(mod))
+    |> case do
+      %{%{} => data} -> 
+        data
+      data ->
+        data
+    end
   end
 
   def reduce_events(events, %_{tags: _}, reducer, acc), do: Enum.reduce(events, acc, reducer)
@@ -155,22 +140,16 @@ defmodule TelemetryMetricsMnesia.Db do
     update_tagged_metric(metric, 0, fn _, acc -> acc + 1 end)
   end
 
-  defp events_reducer_fun(%Sum{tags: []}), do: &Kernel.+/2
+  defp events_reducer_fun(%Sum{tags: []}), do: &(elem(&1, 0) + &2)
 
   defp events_reducer_fun(%Sum{} = metric) do
     update_tagged_metric(metric, 0, &Kernel.+/2)
   end
 
-  defp events_reducer_fun(%LastValue{tags: []}), do: fn v, _acc -> v end
+  defp events_reducer_fun(%LastValue{tags: []}), do: fn {v, _}, _acc -> v end
 
   defp events_reducer_fun(%LastValue{} = metric) do
-    update_tagged_metric(metric, 0, fn v, _acc -> v end)
-  end
-
-  defp events_reducer_fun(%mod{tags: []}) when mod in [Distribution, Summary] do
-    fn metrics, _acc ->
-      stat_fun(mod).(metrics)
-    end
+    update_tagged_metric(metric, 0, fn v,_acc -> v end)
   end
 
   defp events_reducer_fun(%mod{} = metric) when mod in [Distribution, Summary] do
@@ -209,15 +188,16 @@ defmodule TelemetryMetricsMnesia.Db do
   end
 
   defp update_tagged_metric(metric, default, update_fun) do
-    key = List.last(metric.name)
-
-    fn {measurements, metadata}, acc ->
+    fn {measurement, metadata}, acc ->
       tag_values = extract_tags(metric, metadata)
       old = Map.get(acc, tag_values, default)
-      measurement = Map.get(measurements, key, 0)
       Map.put(acc, tag_values, update_fun.(measurement, old))
     end
   end
+
+  defp keep?(_event, nil), do: true
+  defp keep?({_, metadata}, keep), do: keep.(metadata)
+
 
   defp extract_tags(metric, metadata) do
     tag_values = metric.tag_values.(metadata)

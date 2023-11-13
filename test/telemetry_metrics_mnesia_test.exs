@@ -198,46 +198,6 @@ defmodule TelemetryMetricsMnesiaTest do
       Mnesia.clear_table(:telemetry_events)
     end
 
-    test "`counter` with tags and custom tag_values" do
-      tag_values = fn metadata ->
-        case metadata.count do
-          true ->
-            %{metadata | other: metadata.other + 1}
-
-          _ ->
-            metadata
-        end
-      end
-
-      counter =
-        Telemetry.Metrics.counter([:test, :counter, :counter],
-          tags: [:count, :other],
-          tag_values: tag_values
-        )
-
-      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
-
-      n = :rand.uniform(10_000)
-
-      for i <- 1..n do
-        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 2})
-        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: false, other: 3})
-        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 3})
-      end
-
-      assert %{
-               Counter => %{
-                 %{count: true, other: 3} => ^n,
-                 %{count: false, other: 3} => ^n,
-                 %{count: true, other: 4} => ^n
-               }
-             } =
-               TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
-
-      GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
-    end
-
     test "`sum`" do
       sum = Telemetry.Metrics.sum([:test, :sum, :val], tags: [:count, :other])
 
@@ -469,6 +429,80 @@ defmodule TelemetryMetricsMnesiaTest do
       end
     end
   end
+
+  describe "callbacks works correctly" do
+    test "`counter` with tags and custom keep/1" do
+      keep = &(&1.count)
+
+      counter =
+        Telemetry.Metrics.counter([:test, :counter, :counter],
+          tags: [:count, :other],
+          keep: keep
+        )
+
+      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
+
+      n = :rand.uniform(10_000)
+
+      for i <- 1..n do
+        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 2})
+        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: false, other: 3})
+        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 3})
+      end
+
+      assert %{
+               Counter => %{
+                 %{count: true, other: 3} => n,
+                 %{count: true, other: 2} => n
+               }
+             } ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
+
+      GenServer.stop(pid)
+      Mnesia.clear_table(:telemetry_events)
+    end
+
+    test "`counter` with tags and custom tag_values/1" do
+      tag_values = fn metadata ->
+        case metadata.count do
+          true ->
+            %{metadata | other: metadata.other + 1}
+
+          _ ->
+            metadata
+        end
+      end
+
+      counter =
+        Telemetry.Metrics.counter([:test, :counter, :counter],
+          tags: [:count, :other],
+          tag_values: tag_values
+        )
+
+      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
+
+      n = :rand.uniform(10_000)
+
+      for i <- 1..n do
+        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 2})
+        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: false, other: 3})
+        :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 3})
+      end
+
+      assert %{
+               Counter => %{
+                 %{count: true, other: 3} => n,
+                 %{count: false, other: 3} => n,
+                 %{count: true, other: 4} => n
+               }
+             } ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
+
+      GenServer.stop(pid)
+      Mnesia.clear_table(:telemetry_events)
+    end
+  end
+
 
   defp init_metrics(context) do
     opts = Map.get(context, :opts, [])
