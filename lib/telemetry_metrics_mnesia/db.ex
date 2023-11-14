@@ -43,17 +43,18 @@ defmodule TelemetryMetricsMnesia.Db do
   end
 
   def fetch(%_{tags: tags, keep: keep} = metric) do
-    default = 
+    default =
       case tags do
-        [] -> 
+        [] ->
           0
+
         _ ->
           %{}
       end
 
     metric
     |> fetch_events()
-    |> Enum.filter(&(keep?(&1, keep)))
+    |> Enum.filter(&keep?(&1, keep))
     |> reduce_events(metric, events_reducer_fun(metric), default)
   end
 
@@ -87,7 +88,11 @@ defmodule TelemetryMetricsMnesia.Db do
 
     [
       {
-        telemetry_events(key: {:"$1", event_name}, measurements: %{key => :"$2"}, metadata: :"$3"),
+        telemetry_events(
+          key: {:"$1", event_name},
+          measurements: %{key => :"$2"},
+          metadata: :"$3"
+        ),
         build_match_guards(metric),
         [{{:"$2", :"$3"}}]
       }
@@ -125,8 +130,9 @@ defmodule TelemetryMetricsMnesia.Db do
     |> Enum.reduce(%{}, reducer)
     |> Map.new(stat_fun(mod))
     |> case do
-      %{%{} => data} -> 
+      %{%{} => data} ->
         data
+
       data ->
         data
     end
@@ -149,7 +155,7 @@ defmodule TelemetryMetricsMnesia.Db do
   defp events_reducer_fun(%LastValue{tags: []}), do: fn {v, _}, _acc -> v end
 
   defp events_reducer_fun(%LastValue{} = metric) do
-    update_tagged_metric(metric, 0, fn v,_acc -> v end)
+    update_tagged_metric(metric, 0, fn v, _acc -> v end)
   end
 
   defp events_reducer_fun(%mod{} = metric) when mod in [Distribution, Summary] do
@@ -197,7 +203,6 @@ defmodule TelemetryMetricsMnesia.Db do
 
   defp keep?(_event, nil), do: true
   defp keep?({_, metadata}, keep), do: keep.(metadata)
-
 
   defp extract_tags(metric, metadata) do
     tag_values = metric.tag_values.(metadata)

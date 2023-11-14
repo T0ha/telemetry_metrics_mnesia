@@ -432,7 +432,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
   describe "callbacks works correctly" do
     test "`counter` with tags and custom keep/1" do
-      keep = &(&1.count)
+      keep = & &1.count
 
       counter =
         Telemetry.Metrics.counter([:test, :counter, :counter],
@@ -502,7 +502,6 @@ defmodule TelemetryMetricsMnesiaTest do
       Mnesia.clear_table(:telemetry_events)
     end
   end
-
 
   defp init_metrics(context) do
     opts = Map.get(context, :opts, [])
