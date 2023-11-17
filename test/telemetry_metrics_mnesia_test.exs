@@ -503,6 +503,130 @@ defmodule TelemetryMetricsMnesiaTest do
     end
   end
 
+  describe "mnesia distribution" do
+    setup do
+      args =
+        :code.get_path()
+        |> Enum.reduce([], &[~c"-pa", &1 | &2])
+
+      {:ok, pid, node} =
+        :peer.start(%{name: :test1, host: ~c"127.0.0.1", connection: :standard_io, args: args})
+
+      :ok = :peer.call(pid, :mnesia, :start, [])
+
+      apps = [:telemetry, :telemetry_metrics]
+      {:ok, _} = :peer.call(pid, Application, :ensure_all_started, [apps])
+
+      on_exit(fn ->
+        :peer.stop(pid)
+        :mnesia.clear_table(:telemetry_events)
+      end)
+
+      {:ok, %{remote: pid, node: node, metric: :counter}}
+    end
+
+    test "2 nodes subsequently starts correctly with defauls opts", %{remote: remote} = context do
+      counter =
+        Telemetry.Metrics.counter([:test, :counter, :val])
+
+      {:ok, _pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
+
+      assert {:ok, _pid} =
+               :peer.call(remote, TelemetryMetricsMnesia, :start, [[metrics: [counter]]])
+
+      assert 0 ==
+               :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
+                 [:test, :counter, :val],
+                 [type: Telemetry.Metrics.Counter]
+               ])
+
+      {:ok, %{n: n}} = generate_data(context)
+
+      assert n ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :val],
+                 type: Telemetry.Metrics.Counter
+               )
+
+      assert n ==
+               :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
+                 [:test, :counter, :val],
+                 [type: Telemetry.Metrics.Counter]
+               ])
+
+      assert Node.list() == [context.node]
+    end
+
+    test "2 nodes subsequently starts correctly with `mnesia.distributed: false`",
+         %{remote: remote} = context do
+      counter =
+        Telemetry.Metrics.counter([:test, :counter, :val])
+
+      {:ok, _pid} =
+        TelemetryMetricsMnesia.start_link(metrics: [counter], mnesia: [distributed: false])
+
+      {:ok, _pid} =
+        :peer.call(remote, TelemetryMetricsMnesia, :start, [
+          [metrics: [counter], mnesia: [distributed: false]]
+        ])
+
+      assert 0 ==
+               :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
+                 [:test, :counter, :val],
+                 [type: Telemetry.Metrics.Counter]
+               ])
+
+      {:ok, %{n: n}} = generate_data(context)
+
+      assert n ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :val],
+                 type: Telemetry.Metrics.Counter
+               )
+
+      assert 0 ==
+               :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
+                 [:test, :counter, :val],
+                 [type: Telemetry.Metrics.Counter]
+               ])
+
+      assert Node.list() == []
+    end
+
+    test "2 nodes subsequently starts correctly with `mnesia.node_discovery: false`",
+         %{remote: remote} = context do
+      counter =
+        Telemetry.Metrics.counter([:test, :counter, :val])
+
+      {:ok, _pid} =
+        TelemetryMetricsMnesia.start_link(metrics: [counter], mnesia: [node_discovery: false])
+
+      {:ok, _pid} =
+        :peer.call(remote, TelemetryMetricsMnesia, :start, [
+          [metrics: [counter], mnesia: [node_discovery: false]]
+        ])
+
+      assert 0 ==
+               :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
+                 [:test, :counter, :val],
+                 [type: Telemetry.Metrics.Counter]
+               ])
+
+      {:ok, %{n: n}} = generate_data(context)
+
+      assert n ==
+               TelemetryMetricsMnesia.fetch([:test, :counter, :val],
+                 type: Telemetry.Metrics.Counter
+               )
+
+      assert 0 ==
+               :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
+                 [:test, :counter, :val],
+                 [type: Telemetry.Metrics.Counter]
+               ])
+
+      assert Node.list() == []
+    end
+  end
+
   defp init_metrics(context) do
     opts = Map.get(context, :opts, [])
     metric = apply(Telemetry.Metrics, context[:metric], [[:test, context[:metric], :val], opts])

@@ -7,6 +7,8 @@ defmodule TelemetryMetricsMnesia.Db do
   alias :mnesia, as: Mnesia
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum, Summary}
 
+  @telemetry_events_table :telemetry_events
+
   Record.defrecord(:telemetry_events, key: {[], nil}, measurements: %{}, metadata: %{})
 
   @type t() ::
@@ -35,9 +37,71 @@ defmodule TelemetryMetricsMnesia.Db do
     end
   end
 
-  def init() do
-    Mnesia.create_table(:telemetry_events,
+  def init(opts) do
+    opts
+    |> Keyword.get(:distributed, true)
+    |> init_or_connect_mnesia_table(opts)
+  end
+
+  defp node_discovery(true) do
+    host =
+      node()
+      |> to_string()
+      |> String.split("@")
+      |> Enum.at(1)
+
+    host
+    |> String.to_atom()
+    |> :net_adm.names()
+    |> case do
+      {:ok, names} ->
+        names
+        |> Enum.each(fn {node, _} ->
+          [node, "@", host]
+          |> Enum.join()
+          |> String.to_atom()
+          |> Node.connect()
+        end)
+
+      _ ->
+        :ok
+    end
+
+    Node.list()
+  end
+
+  defp node_discovery(_), do: Node.list()
+
+  defp init_or_connect_mnesia_table(false, _opts), do: create_or_copy_table(false)
+
+  defp init_or_connect_mnesia_table(_, opts) do
+    opts
+    |> Keyword.get(:node_discovery, true)
+    |> node_discovery()
+    |> init_or_connect_mnesia_table()
+  end
+
+  defp init_or_connect_mnesia_table([]) do
+    create_or_copy_table(false)
+  end
+
+  defp init_or_connect_mnesia_table(nodes) do
+    Mnesia.change_config(:extra_db_nodes, nodes)
+
+    :tables
+    |> Mnesia.system_info()
+    |> Enum.member?(@telemetry_events_table)
+    |> create_or_copy_table()
+  end
+
+  defp create_or_copy_table(true) do
+    Mnesia.add_table_copy(@telemetry_events_table, node(), :ram_copies)
+  end
+
+  defp create_or_copy_table(_) do
+    Mnesia.create_table(@telemetry_events_table,
       attributes: [:event, :measurements, :metadata],
+      ram_copies: [node() | Mnesia.system_info(:extra_db_nodes)],
       type: :ordered_set
     )
   end

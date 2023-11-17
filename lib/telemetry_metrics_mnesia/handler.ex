@@ -10,7 +10,7 @@ defmodule TelemetryMetricsMnesia.EventHandler do
 
   @spec attach(metrics) :: [:telemetry.handler_id()]
   def attach(metrics) do
-    Logger.info("metrics: #{inspect(metrics)}")
+    # Logger.info("metrics: #{inspect(metrics)}")
 
     for {event, metrics} <- Enum.group_by(metrics, & &1.event_name) do
       id = {__MODULE__, event, self()}

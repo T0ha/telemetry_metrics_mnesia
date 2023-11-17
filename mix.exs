@@ -28,7 +28,7 @@ defmodule TelemetryMetricsMnesia.MixProject do
 
   defp description() do
     """
-    `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB. 
+    `Telemetry.Metrics` reporter and metrics backend based on Mnesia DB.
     """
   end
 
@@ -52,6 +52,7 @@ defmodule TelemetryMetricsMnesia.MixProject do
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.8", only: [:dev, :test], runtime: false},
+      {:local_cluster, "~> 1.2", only: [:test]},
       {:ex_doc, "~> 0.27", only: :dev, runtime: false}
     ]
   end

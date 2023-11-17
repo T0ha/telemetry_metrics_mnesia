@@ -215,9 +215,15 @@ defmodule TelemetryMetricsMnesia do
 
   Available options:
   - `:metrics` - Required. List of metrics to handle.
+  - `:mnesia` - Optional. Mnesia settings for distribution.
+    - `:distributed` - Optional. Boolean. If distribution enabled. Default, `true`.
+    - `:node_discovery` - Optional. Boolean. If node discovery process is needed. Default, `true`.
 
-  More examples in ["Starting"](#module-starting)
+  More examples in ["Starting"](#module-starting) and ["How metrics are stored"](#module-how-metrics-are-stored).
   """
+
+  @spec start(options()) :: GenServer.on_start()
+  def start(options), do: GenServer.start(__MODULE__, options, name: __MODULE__)
 
   @spec start_link(options()) :: GenServer.on_start()
   def start_link(options), do: GenServer.start_link(__MODULE__, options, name: __MODULE__)
@@ -225,7 +231,7 @@ defmodule TelemetryMetricsMnesia do
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
-    Db.init()
+    Db.init(Keyword.get(options, :mnesia, []))
 
     metrics = options[:metrics]
     handler_ids = EventHandler.attach(metrics)
