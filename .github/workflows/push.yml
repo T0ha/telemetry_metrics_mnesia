@@ -176,6 +176,9 @@ jobs:
             ./deps
             ./_build
 
+      - name: Start epmd
+        run: epmd -daemon
+
       - name: Tests
         run: mix test
 
