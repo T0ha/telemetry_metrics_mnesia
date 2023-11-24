@@ -10,7 +10,7 @@
 - Supports distribution between BEAM nodes.
 - In-memory and persistant data storage modes.
 - Custom metric aggregaaion support.
-- Has no external dependences.
+- Has no external non-beam dependences.
 
 ## Installation
 
@@ -23,6 +23,24 @@ defp deps do
   ]
 end
 ```
+
+## Configuration
+
+You can configure optional cleanup process. Add the following to your `config.exs`:
+
+```elixir
+import Config
+
+config :telemetry_metrics_mnesia,
+    # Timeout between cleanup process invocations in seconds, default 10.
+    cleanup_timeout: 10,
+
+    # Max telemetry events age to store in seconds (0 means infinity), default 0.
+    max_storage_time: 5
+```
+
+When `max_storage_time` is zero cleanup process doesn't start.
+
 
 ## Usage
 

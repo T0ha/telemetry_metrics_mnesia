@@ -15,6 +15,14 @@ defmodule TelemetryMetricsMnesia.MixProject do
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      # dialyxir
+      dialyzer: [
+        ignore_warnings: ".dialyzer_ignore",
+        plt_add_apps: [
+          :mix,
+          :ex_unit
+        ]
+      ],
       source_url: "https://github.com/T0ha/telemetry_metrics_mnesia"
     ]
   end

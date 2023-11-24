@@ -18,6 +18,12 @@ defmodule TelemetryMetricsMnesia.Db do
             metadata: :telemetry.event_metadata()
           )
 
+  def init(opts) do
+    opts
+    |> Keyword.get(:distributed, true)
+    |> init_or_connect_mnesia_table(opts)
+  end
+
   def write_event(event, measurements, metadata) do
     transaction = fn ->
       timestamp = System.os_time(:microsecond)
@@ -37,10 +43,34 @@ defmodule TelemetryMetricsMnesia.Db do
     end
   end
 
-  def init(opts) do
-    opts
-    |> Keyword.get(:distributed, true)
-    |> init_or_connect_mnesia_table(opts)
+  def fetch(%_{tags: tags, keep: keep} = metric) do
+    default =
+      case tags do
+        [] ->
+          0
+
+        _ ->
+          %{}
+      end
+
+    metric
+    |> fetch_events()
+    |> Enum.filter(&keep?(&1, keep))
+    |> reduce_events(metric, events_reducer_fun(metric), default)
+  end
+
+  def fetch(_), do: :notimpl
+
+  def clean(timestamp) do
+    fn ->
+      @telemetry_events_table
+      |> Mnesia.all_keys()
+      |> Enum.take_while(&(elem(&1, 0) <= timestamp))
+      |> Enum.each(fn key ->
+        Mnesia.delete({@telemetry_events_table, key})
+      end)
+    end
+    |> Mnesia.transaction()
   end
 
   defp node_discovery(true) do
@@ -105,24 +135,6 @@ defmodule TelemetryMetricsMnesia.Db do
       type: :ordered_set
     )
   end
-
-  def fetch(%_{tags: tags, keep: keep} = metric) do
-    default =
-      case tags do
-        [] ->
-          0
-
-        _ ->
-          %{}
-      end
-
-    metric
-    |> fetch_events()
-    |> Enum.filter(&keep?(&1, keep))
-    |> reduce_events(metric, events_reducer_fun(metric), default)
-  end
-
-  def fetch(_), do: :notimpl
 
   defp fetch_events(metric) do
     metric

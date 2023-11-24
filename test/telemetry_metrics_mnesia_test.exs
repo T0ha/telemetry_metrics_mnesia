@@ -532,7 +532,7 @@ defmodule TelemetryMetricsMnesiaTest do
       {:ok, _pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
 
       assert {:ok, _pid} =
-               :peer.call(remote, TelemetryMetricsMnesia, :start, [[metrics: [counter]]])
+               :peer.call(remote, TelemetryMetricsMnesia.Worker, :start, [[metrics: [counter]]])
 
       assert 0 ==
                :peer.call(remote, TelemetryMetricsMnesia, :fetch, [
@@ -565,7 +565,7 @@ defmodule TelemetryMetricsMnesiaTest do
         TelemetryMetricsMnesia.start_link(metrics: [counter], mnesia: [distributed: false])
 
       {:ok, _pid} =
-        :peer.call(remote, TelemetryMetricsMnesia, :start, [
+        :peer.call(remote, TelemetryMetricsMnesia.Worker, :start, [
           [metrics: [counter], mnesia: [distributed: false]]
         ])
 
@@ -600,7 +600,7 @@ defmodule TelemetryMetricsMnesiaTest do
         TelemetryMetricsMnesia.start_link(metrics: [counter], mnesia: [node_discovery: false])
 
       {:ok, _pid} =
-        :peer.call(remote, TelemetryMetricsMnesia, :start, [
+        :peer.call(remote, TelemetryMetricsMnesia.Worker, :start, [
           [metrics: [counter], mnesia: [node_discovery: false]]
         ])
 
@@ -627,6 +627,25 @@ defmodule TelemetryMetricsMnesiaTest do
     end
   end
 
+  describe "mnesia cleanup" do
+    setup [:init_metrics, :generate_data]
+
+    @tag metric: :counter
+    test "`counter`", %{n: n, metric: metric} do
+      assert n ==
+               TelemetryMetricsMnesia.fetch([:test, metric, :val],
+                 type: Telemetry.Metrics.Counter
+               )
+
+      :timer.sleep(10_000)
+
+      assert 0 ==
+               TelemetryMetricsMnesia.fetch([:test, metric, :val],
+                 type: Telemetry.Metrics.Counter
+               )
+    end
+  end
+
   defp init_metrics(context) do
     opts = Map.get(context, :opts, [])
     metric = apply(Telemetry.Metrics, context[:metric], [[:test, context[:metric], :val], opts])
@@ -634,6 +653,7 @@ defmodule TelemetryMetricsMnesiaTest do
     {:ok, _pid} = TelemetryMetricsMnesia.start_link(metrics: [metric])
 
     on_exit(fn ->
+      # GenServer.stop(pid)
       Mnesia.clear_table(:telemetry_events)
     end)
 
