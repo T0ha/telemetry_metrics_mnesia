@@ -12,6 +12,23 @@ defmodule TelemetryMetricsMnesia do
         ]
       end
 
+  ## Configuration
+
+  You can configure optional cleanup process. Add the following to your `config.exs`:
+
+  ```elixir
+  import Config
+
+  config :telemetry_metrics_mnesia,
+    # Timeout between cleanup process invocations in seconds, default 10.
+    cleanup_timeout: 10,
+
+    # Max telemetry events age to store in seconds (0 means infinity), default 0.
+    max_storage_time: 5
+  ```
+
+  When `max_storage_time` is zero cleanup process doesn't start.
+
   ## Starting
 
   To use it, start the reporter with the `start_link/1` function, providing it a list of
@@ -208,6 +225,15 @@ defmodule TelemetryMetricsMnesia do
           optional(Telemetry.Metrics.Sum) => number() | tagged_metrics(number())
         }
 
+  @spec child_spec(options()) :: Supervisor.child_spec()
+  def child_spec(options) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [options]},
+      type: :supervisor
+    }
+  end
+
   @doc """
   Starts a reporter and links it to the process.
 
@@ -220,7 +246,7 @@ defmodule TelemetryMetricsMnesia do
   More examples in ["Starting"](#module-starting) and ["How metrics are stored"](#module-how-metrics-are-stored).
   """
 
-  @spec start_link(options()) :: GenServer.on_start()
+  @spec start_link(options()) :: Supervisor.on_start()
   def start_link(options), do: Supervisor.start_link(TelemetryMetricsMnesia.Supervisor, options)
 
   @doc """
