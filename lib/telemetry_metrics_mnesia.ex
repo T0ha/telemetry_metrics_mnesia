@@ -209,6 +209,13 @@ defmodule TelemetryMetricsMnesia do
           standard_deviation: number()
         }
 
+  @type metric_type() ::
+          Telemetry.Metrics.Counter
+          | Metrics.Sum
+          | Metrics.LastValue
+          | Metrics.Summary
+          | Metrics.Distribution
+
   @type tagged_metrics(inner_type) :: %{
           (tag :: map()) => inner_type
         }
@@ -217,12 +224,13 @@ defmodule TelemetryMetricsMnesia do
   See ["How metrics are returned"](#module-how-metrics-are-returned)
   """
   @type metric_data() :: %{
-          optional(Telemetry.Metrics.Counter) => number() | tagged_metrics(number()),
-          optional(Telemetry.Metrics.Distribution) =>
-            distribution() | tagged_metrics(distribution()),
-          optional(Telemetry.Metrics.Summary) => summary() | tagged_metrics(summary()),
-          optional(Telemetry.Metrics.LastValue) => number() | tagged_metrics(number()),
-          optional(Telemetry.Metrics.Sum) => number() | tagged_metrics(number())
+          metric_type() =>
+            number()
+            | summary()
+            | distribution()
+            | tagged_metrics(number())
+            | tagged_metrics(summary())
+            | tagged_metrics(distribution())
         }
 
   @spec child_spec(options()) :: Supervisor.child_spec()
@@ -257,7 +265,7 @@ defmodule TelemetryMetricsMnesia do
 
   More info in ["How metrics are returned"](#module-how-metrics-are-returned).
   """
-  @spec fetch(Metrics.metric_name(), %{} | [Keyword.t()]) :: metric_data()
+  @spec fetch(Metrics.metric_name(), %{} | Keyword.t()) :: metric_data()
   def fetch(metric_name, opts \\ %{})
   def fetch(metric_name, opts) when is_list(opts), do: fetch(metric_name, Map.new(opts))
   def fetch(metric_name, %{} = opts), do: TelemetryMetricsMnesia.Worker.fetch(metric_name, opts)
