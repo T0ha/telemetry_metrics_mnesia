@@ -223,15 +223,22 @@ defmodule TelemetryMetricsMnesia do
   @typedoc """
   See ["How metrics are returned"](#module-how-metrics-are-returned)
   """
-  @type metric_data() :: %{
-          metric_type() =>
-            number()
-            | summary()
-            | distribution()
-            | tagged_metrics(number())
-            | tagged_metrics(summary())
-            | tagged_metrics(distribution())
-        }
+  @type metric_data() ::
+          %{
+            metric_type() =>
+              number()
+              | summary()
+              | distribution()
+              | tagged_metrics(number())
+              | tagged_metrics(summary())
+              | tagged_metrics(distribution())
+          }
+          | number()
+          | summary()
+          | distribution()
+          | tagged_metrics(number())
+          | tagged_metrics(summary())
+          | tagged_metrics(distribution())
 
   @spec child_spec(options()) :: Supervisor.child_spec()
   def child_spec(options) do
