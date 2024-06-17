@@ -1,6 +1,9 @@
 defmodule TelemetryMetricsMnesia.EventHandler do
   @moduledoc false
 
+  use GenServer, 
+    restart: :permanent
+
   require Logger
   require Record
 
@@ -34,11 +37,28 @@ defmodule TelemetryMetricsMnesia.EventHandler do
           :telemetry.event_metadata(),
           metrics()
         ) :: :ok | {:error, any()}
-  def handle_event(event, measurements, metadata, _metrics) do
+  def handle_event(event, measurements, metadata, metrics) do
     # Logger.debug(
-    #   ~c"handle_event(#{inspect(event)}, #{inspect(measurements)}, #{inspect(metadata)}, _)"
+    #   ~c"handle_event(#{inspect(event)}, #{inspect(measurements)}, #{inspect(metadata)}, #{inspect(metrics)})"
     # )
 
-    Db.write_event(event, measurements, metadata)
+    GenServer.call(__MODULE__, {:event, event, measurements, metadata, metrics})
+
+    :ok
+  end
+
+  def start_link(_), do:
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+
+  @impl true
+  def init(_), do: {:ok, true}
+
+  @impl true
+  def handle_call({:event, event, measurements, metadata, metrics},_,  _) do
+      Db.write_event(event, measurements, metadata, metrics)
+
+    #  for metric <- metrics, do:
+    #    Db.calculate(metric)
+    {:reply, :ok, true}
   end
 end
