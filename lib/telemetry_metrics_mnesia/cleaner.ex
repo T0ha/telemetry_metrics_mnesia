@@ -32,7 +32,12 @@ defmodule TelemetryMetricsMnesia.Cleaner do
     timestamp =
       System.os_time(:microsecond) - @max_storage_time * 1_000_000
 
-    Db.clean(timestamp)
+    {duration, _} =
+      :timer.tc(fn ->
+        Db.clean(timestamp)
+      end)
+
+    Logger.info("DB cleanup finished in #{duration} microseconds")
     {:noreply, state, @cleanup_timeout}
   end
 

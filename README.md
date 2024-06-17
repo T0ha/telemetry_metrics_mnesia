@@ -94,10 +94,10 @@ alias TelemetryMetricsMnesia, as: Metrics
 
 # Simple metrics
 %{Counter => request_count} = Metrics.fetch([:http, :request, :count])
-%{Counter => request_count_per_minute} = Metrics.fetch([:http, :request, :count], granularity: :minite)
+%{Counter => request_count_per_minute} = Metrics.fetch([:http, :request, :count], granularity: [minites: 1])
 
 %{Sum => total_requests_size} = Metrics.fetch([:http, :request, :payload_size])
-%{Sum => request_size_per_second} = Metrics.fetch([:http, :request, :count], granularity: :second)
+%{Sum => request_size_per_second} = Metrics.fetch([:http, :request, :count], granularity: [:seconds, 1])
 
 
 %{LastValue => total_memory} = Metrics.fetch([:vm, :memory, :total])

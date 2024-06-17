@@ -7,15 +7,17 @@ defmodule TelemetryMetricsMnesia.Db do
   alias :mnesia, as: Mnesia
   alias Telemetry.Metrics.{Counter, Distribution, LastValue, Sum, Summary}
 
-  @telemetry_events_table :telemetry_events
+  @telemetry_metrics_table :telemetry_metrics
+  @telemetry_tables [
+    {:telemetry_metrics, [metric: nil, data: %{}, value: 0]}
+  ]
 
-  Record.defrecord(:telemetry_events, key: {[], nil}, measurements: %{}, metadata: %{})
+  for {table, fields} <- @telemetry_tables, do: Record.defrecord(table, fields)
 
-  @type t() ::
-          record(:telemetry_events,
-            key: {:telemetry.event_name(), non_neg_integer()},
-            measurements: :telemetry.event_measurements(),
-            metadata: :telemetry.event_metadata()
+  @type telemetry_metrics() ::
+          record(:telemetry_metrics,
+            metric: Telemetry.Metrics.t(),
+            data: map()
           )
 
   def init(opts) do
@@ -24,17 +26,38 @@ defmodule TelemetryMetricsMnesia.Db do
     |> init_or_connect_mnesia_table(opts)
   end
 
-  def write_event(event, measurements, metadata) do
+  # 1906
+  def write_event(event, measurements, metadata, metrics) do
     transaction = fn ->
       timestamp = System.os_time(:microsecond)
 
-      Mnesia.write(
-        telemetry_events(key: {timestamp, event}, measurements: measurements, metadata: metadata)
-      )
+      for metric <- metrics,
+          metric.event_name == event,
+          is_nil(metric.keep) or metric.keep.(metadata) do
+        data =
+          {@telemetry_metrics_table, metric}
+          |> Mnesia.wread()
+          |> case do
+            [] -> []
+            [{_, _, data, _}] -> data
+          end
+
+        key = List.last(metric.name)
+        tag_values = extract_tags(metric, metadata)
+
+        data =
+          measurements
+          |> Map.get(key, 0)
+          |> then(&[{timestamp, &1, tag_values} | data])
+
+        value = apply_metric_type(data, metric)
+
+        Mnesia.write(telemetry_metrics(metric: metric, data: data, value: value))
+      end
     end
 
     case Mnesia.transaction(transaction) do
-      {:atomic, :ok} ->
+      {:atomic, _events} ->
         :ok
 
       {:aborted, reason} ->
@@ -43,34 +66,110 @@ defmodule TelemetryMetricsMnesia.Db do
     end
   end
 
-  def fetch(%_{tags: tags, keep: keep} = metric) do
-    default =
-      case tags do
-        [] ->
-          0
+  def fetch(metric) do
+    @telemetry_metrics_table
+    |> Mnesia.dirty_read(metric)
+    |> case do
+      [] ->
+        default(metric)
 
-        _ ->
-          %{}
-      end
-
-    metric
-    |> fetch_events()
-    |> Enum.filter(&keep?(&1, keep))
-    |> reduce_events(metric, events_reducer_fun(metric), default)
+      [telemetry_metric] ->
+        telemetry_metrics(telemetry_metric, :value)
+    end
   end
 
-  def fetch(_), do: :notimpl
+  def apply_metric_type(data, %mod{} = metric) when mod in [Distribution, Summary] do
+    reducer =
+      metric
+      |> events_reducer_fun()
+      |> check_granularity(metric)
+
+    data
+    |> Enum.reduce_while(%{}, reducer)
+    |> Map.new(stat_fun(mod))
+    |> case do
+      %{%{} => data} ->
+        data
+
+      data ->
+        data
+    end
+  end
+
+  def apply_metric_type(data, metric) do
+    metric
+    |> events_reducer_fun()
+    |> check_granularity(metric)
+    |> then(&Enum.reduce_while(data, default(metric), &1))
+  end
+
+  defp check_granularity(reducer, %_{reporter_options: []}), do: reducer
+
+  defp check_granularity(reducer, metric) do
+    case granularity_min_timestamp(metric) do
+      nil ->
+        reducer
+
+      timestamp ->
+        fn
+          {ts, _v, _tag_values}, acc when ts <= timestamp ->
+            {:halt, acc}
+
+          v, acc ->
+            reducer.(v, acc)
+        end
+    end
+  end
+
+  defp granularity_min_timestamp(%_{reporter_options: opts}) do
+    case Keyword.get(opts, :granularity) do
+      [{unit, amount}] ->
+        multiplier =
+          case unit do
+            :microseconds -> 1
+            :milliseconds -> 1000
+            :seconds -> 1_000_000
+            :minutes -> 60 * 1_000_000
+            :hours -> 60 * 60 * 1_000_000
+            :days -> 24 * 60 * 60 * 1_000_000
+          end
+
+        timestamp = System.os_time(:microsecond)
+
+        timestamp - amount * multiplier
+
+      _ ->
+        nil
+    end
+  end
+
+  defp default(%_{tags: []}), do: 0
+  defp default(%_{tags: _}), do: %{}
 
   def clean(timestamp) do
     fn ->
-      @telemetry_events_table
-      |> Mnesia.all_keys()
-      |> Enum.take_while(&(elem(&1, 0) <= timestamp))
-      |> Enum.each(fn key ->
-        Mnesia.delete({@telemetry_events_table, key})
-      end)
+      Mnesia.foldr(
+        fn rec, _recs ->
+          data = telemetry_metrics(rec, :data)
+
+          rec
+          |> telemetry_metrics(:metric)
+          |> clean_metric(data, timestamp)
+          |> Mnesia.write()
+        end,
+        [],
+        @telemetry_metrics_table
+      )
     end
     |> Mnesia.transaction()
+  end
+
+  defp clean_metric(metric, data, timestamp) do
+    data = Enum.take_while(data, &(elem(&1, 0) > timestamp))
+
+    value = apply_metric_type(data, metric)
+
+    telemetry_metrics(metric: metric, data: data, value: value)
   end
 
   defp node_discovery(true) do
@@ -120,127 +219,56 @@ defmodule TelemetryMetricsMnesia.Db do
 
     :tables
     |> Mnesia.system_info()
-    |> Enum.member?(@telemetry_events_table)
+    |> Enum.member?(@telemetry_metrics_table)
     |> create_or_copy_table()
   end
 
   defp create_or_copy_table(true) do
-    Mnesia.add_table_copy(@telemetry_events_table, node(), :ram_copies)
+    for {table, _fields} <- @telemetry_tables,
+        do: Mnesia.add_table_copy(table, node(), :ram_copies)
   end
 
   defp create_or_copy_table(_) do
-    Mnesia.create_table(@telemetry_events_table,
-      attributes: [:event, :measurements, :metadata],
-      ram_copies: [node() | Mnesia.system_info(:extra_db_nodes)],
-      type: :ordered_set
-    )
-  end
+    for {table, fields} <- @telemetry_tables do
+      attributes = Keyword.keys(fields)
 
-  defp fetch_events(metric) do
-    metric
-    |> build_transaction_fun()
-    |> Mnesia.transaction()
-    |> elem(1)
-  end
-
-  defp build_transaction_fun(metric) do
-    fn ->
-      Mnesia.select(:telemetry_events, build_match_expression(metric))
+      Mnesia.create_table(table,
+        attributes: attributes,
+        ram_copies: [node() | Mnesia.system_info(:extra_db_nodes)],
+        type: :ordered_set
+      )
     end
   end
 
-  defp build_match_expression(%Counter{event_name: event_name} = metric) do
-    [
-      {
-        telemetry_events(key: {:"$1", event_name}, metadata: :"$2"),
-        build_match_guards(metric),
-        [{{%{}, :"$2"}}]
-      }
-    ]
-  end
-
-  defp build_match_expression(%_{name: name, event_name: event_name} = metric) do
-    key = List.last(name)
-
-    [
-      {
-        telemetry_events(
-          key: {:"$1", event_name},
-          measurements: %{key => :"$2"},
-          metadata: :"$3"
-        ),
-        build_match_guards(metric),
-        [{{:"$2", :"$3"}}]
-      }
-    ]
-  end
-
-  defp build_match_guards(%_{reporter_options: opts}) do
-    case Keyword.get(opts, :granularity) do
-      [{unit, amount}] ->
-        multiplier =
-          case unit do
-            :microseconds -> 1
-            :milliseconds -> 1000
-            :seconds -> 1_000_000
-            :minutes -> 60 * 1_000_000
-            :hours -> 60 * 60 * 1_000_000
-            :days -> 24 * 60 * 60 * 1_000_000
-          end
-
-        timestamp = System.os_time(:microsecond)
-
-        [{:>, :"$1", timestamp - amount * multiplier}]
-
-      _ ->
-        []
-    end
-  end
-
-  defp build_match_guards(_), do: []
-
-  def reduce_events(events, metric, reducer, acc \\ %{})
-
-  def reduce_events(events, %mod{tags: _}, reducer, _acc) when mod in [Distribution, Summary] do
-    events
-    |> Enum.reduce(%{}, reducer)
-    |> Map.new(stat_fun(mod))
-    |> case do
-      %{%{} => data} ->
-        data
-
-      data ->
-        data
-    end
-  end
-
-  def reduce_events(events, %_{tags: _}, reducer, acc), do: Enum.reduce(events, acc, reducer)
-
-  defp events_reducer_fun(%Counter{tags: []}), do: fn _, acc -> acc + 1 end
+  defp events_reducer_fun(%Counter{tags: []}), do: fn _, acc -> {:cont, acc + 1} end
 
   defp events_reducer_fun(%Counter{} = metric) do
     update_tagged_metric(metric, 0, fn _, acc -> acc + 1 end)
   end
 
-  defp events_reducer_fun(%Sum{tags: []}), do: &(elem(&1, 0) + &2)
+  defp events_reducer_fun(%Sum{tags: []}), do: &{:cont, elem(&1, 1) + &2}
 
   defp events_reducer_fun(%Sum{} = metric) do
-    update_tagged_metric(metric, 0, &Kernel.+/2)
+    update_tagged_metric(metric, 0, &(&1 + &2))
   end
 
-  defp events_reducer_fun(%LastValue{tags: []}), do: fn {v, _}, _acc -> v end
+  defp events_reducer_fun(%LastValue{tags: []}), do: fn {_, v, _}, _acc -> {:halt, v} end
 
   defp events_reducer_fun(%LastValue{} = metric) do
-    update_tagged_metric(metric, 0, fn v, _acc -> v end)
+    update_tagged_metric(metric, nil, fn
+      v, nil -> v
+      _, acc -> acc
+    end)
   end
 
   defp events_reducer_fun(%mod{} = metric) when mod in [Distribution, Summary] do
-    update_tagged_metric(metric, [], &[&1 | &2])
+    update_tagged_metric(metric, [], fn v, acc -> [v | acc] end)
   end
 
   defp stat_fun(Distribution), do: &distribution/1
   defp stat_fun(Summary), do: &summary/1
 
+  defp summary({_, data, k}), do: {k, summary(data)}
   defp summary({k, data}), do: {k, summary(data)}
 
   defp summary(data) do
@@ -269,16 +297,15 @@ defmodule TelemetryMetricsMnesia.Db do
     }
   end
 
-  defp update_tagged_metric(metric, default, update_fun) do
-    fn {measurement, metadata}, acc ->
-      tag_values = extract_tags(metric, metadata)
+  defp update_tagged_metric(_metric, default, update_fun) do
+    fn {_, measurement, tag_values}, acc ->
       old = Map.get(acc, tag_values, default)
-      Map.put(acc, tag_values, update_fun.(measurement, old))
+      {:cont, Map.put(acc, tag_values, update_fun.(measurement, old))}
     end
   end
 
-  defp keep?(_event, nil), do: true
-  defp keep?({_, metadata}, keep), do: keep.(metadata)
+  def keep?(_event, nil), do: true
+  def keep?({_, metadata}, keep), do: keep.(metadata)
 
   defp extract_tags(metric, metadata) do
     tag_values = metric.tag_values.(metadata)
