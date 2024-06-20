@@ -13,7 +13,7 @@ env:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Set up Elixir
@@ -85,7 +85,7 @@ jobs:
   code_checks:
     name: Run code checks
     needs: build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Set up Elixir
@@ -109,7 +109,7 @@ jobs:
             ./deps
             ./_build
 
-      - name: Compile and chack warnings
+      - name: Compile and check warnings
         run: mix do clean, compile --warnings-as-errors
 
       - name: Format
@@ -121,7 +121,7 @@ jobs:
   dialyzer:
     name: Run dialyzer
     needs: build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Set up Elixir
@@ -152,7 +152,7 @@ jobs:
   tests:
     name: Run tests
     needs: build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Set up Elixir
@@ -190,7 +190,7 @@ jobs:
       - dialyzer
       - code_checks
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     env:
       MIX_ENV: dev
@@ -217,6 +217,11 @@ jobs:
             ~/.hex
             ./deps
             ./_build
+
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.10.0
 
       - name: Install Semantic Release
         run:  npm install semantic-release @semantic-release/git @semantic-release/exec @semantic-release/changelog
