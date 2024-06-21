@@ -4,7 +4,6 @@ defmodule TelemetryMetricsMnesia.Supervisor do
 
   def init(options) do
     children = [
-      TelemetryMetricsMnesia.EventHandler,
       {TelemetryMetricsMnesia.Worker, options},
       TelemetryMetricsMnesia.Cleaner
     ]
