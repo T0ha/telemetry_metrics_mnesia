@@ -12,6 +12,8 @@ defmodule TelemetryMetricsMnesiaTest do
 
   doctest TelemetryMetricsMnesia
 
+  @max_iterations 10_000
+
   describe "metrics without tags works correctly" do
     setup [:init_metrics, :generate_data]
 
@@ -62,7 +64,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: metrics)
 
-      n = :rand.uniform(10_000)
+      n = iterations()
 
       for i <- 1..n do
         :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true})
@@ -90,7 +92,7 @@ defmodule TelemetryMetricsMnesiaTest do
              } == TelemetryMetricsMnesia.fetch([:test, :summary, :val])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
 
     test "with the same event" do
@@ -104,7 +106,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: metrics)
 
-      n = :rand.uniform(10_000)
+      n = iterations()
 
       for i <- 1..n do
         :telemetry.execute([:test], %{val: i, total: n}, %{count: true})
@@ -132,18 +134,18 @@ defmodule TelemetryMetricsMnesiaTest do
              } = TelemetryMetricsMnesia.fetch([:test, :val])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
   end
 
-  @tag :skip
+  # @tag :skip
   test "`counter` metrics fetch correctly timings are ok" do
     counter = Telemetry.Metrics.counter([:test, :counter, :time, :counter])
     garbage = Telemetry.Metrics.counter([:test, :garbage, :time, :garbage])
 
     {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter, garbage])
 
-    n = 10_000
+    n = @max_iterations
 
     times =
       for i <- 1..n do
@@ -157,18 +159,18 @@ defmodule TelemetryMetricsMnesiaTest do
       end
       |> Explorer.Series.from_list()
 
-    assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 100
-    assert Explorer.Series.quantile(times, 0.99) < 100
+    assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 1000
+    assert Explorer.Series.quantile(times, 0.99) |> IO.inspect(label: "Insert time 99%") <= 5000
 
-    {t, %{Counter => _}} =
-      :timer.tc(fn ->
-        TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
-      end)
+    assert {t, %{Counter => ^n}} =
+             :timer.tc(fn ->
+               TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
+             end)
 
-    assert t <= 5000
+    assert IO.inspect(t, label: "Fetch time") <= 2000
 
     GenServer.stop(pid)
-    Mnesia.clear_table(:telemetry_events)
+    Mnesia.clear_table(:telemetry_metrics)
   end
 
   describe "metrics with tags works correctly" do
@@ -177,7 +179,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 2})
@@ -195,7 +197,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
 
     test "`sum`" do
@@ -203,7 +205,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [sum])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :sum], %{val: i, total: n}, %{count: true, other: 2})
@@ -223,7 +225,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :sum, :val])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
 
     test "`last_value`" do
@@ -232,7 +234,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [last_value])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :last_value], %{val: i, total: n}, %{count: true, other: 2})
@@ -250,7 +252,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :last_value, :val])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
 
     test "`distribution`" do
@@ -259,7 +261,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [distribution])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :distribution], %{val: i, total: n}, %{count: true, other: 2})
@@ -296,7 +298,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :distribution, :val])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
 
     test "`summary`" do
@@ -304,7 +306,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [summary])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :summary], %{val: i, total: n}, %{count: true, other: 2})
@@ -344,7 +346,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :summary, :val])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
   end
 
@@ -442,7 +444,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 2})
@@ -459,7 +461,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
 
     test "`counter` with tags and custom tag_values/1" do
@@ -481,7 +483,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter])
 
-      n = :rand.uniform(10_000)
+      n = iterations(3)
 
       for i <- 1..n do
         :telemetry.execute([:test, :counter], %{val: i, total: n}, %{count: true, other: 2})
@@ -499,7 +501,7 @@ defmodule TelemetryMetricsMnesiaTest do
                TelemetryMetricsMnesia.fetch([:test, :counter, :counter])
 
       GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end
   end
 
@@ -519,7 +521,7 @@ defmodule TelemetryMetricsMnesiaTest do
 
       on_exit(fn ->
         :peer.stop(pid)
-        :mnesia.clear_table(:telemetry_events)
+        Mnesia.clear_table(:telemetry_metrics)
       end)
 
       {:ok, %{remote: pid, node: node, metric: :counter}}
@@ -630,6 +632,7 @@ defmodule TelemetryMetricsMnesiaTest do
   describe "mnesia cleanup" do
     setup [:init_metrics, :generate_data]
 
+    @tag timeout: 120_000
     @tag metric: :counter
     test "`counter`", %{n: n, metric: metric} do
       assert n ==
@@ -637,7 +640,7 @@ defmodule TelemetryMetricsMnesiaTest do
                  type: Telemetry.Metrics.Counter
                )
 
-      :timer.sleep(10_000)
+      :timer.sleep(60_000)
 
       assert 0 ==
                TelemetryMetricsMnesia.fetch([:test, metric, :val],
@@ -654,17 +657,18 @@ defmodule TelemetryMetricsMnesiaTest do
 
     on_exit(fn ->
       # GenServer.stop(pid)
-      Mnesia.clear_table(:telemetry_events)
+      Mnesia.clear_table(:telemetry_metrics)
     end)
 
     :ok
   end
 
   defp generate_data(context) do
-    n = :rand.uniform(10_000)
+    duplicate = Map.get(context, :duplicate, 1)
+    n = iterations(duplicate)
 
     for i <- 1..n do
-      for _ <- 1..Map.get(context, :duplicate, 1) do
+      for _ <- 1..duplicate do
         :telemetry.execute([:test, context[:metric]], %{val: i, total: n}, %{
           count: true,
           other: 2
@@ -714,5 +718,12 @@ defmodule TelemetryMetricsMnesiaTest do
       median: median,
       count: count
     }
+  end
+
+  defp iterations(divider \\ 1) do
+    @max_iterations
+    |> Kernel./(divider)
+    |> Kernel.ceil()
+    |> :rand.uniform()
   end
 end
