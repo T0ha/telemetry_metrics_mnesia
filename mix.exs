@@ -53,7 +53,7 @@ defmodule TelemetryMetricsMnesia.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:telemetry_metrics, "~> 0.6"},
+      {:telemetry_metrics, "~> 0.6 or ~> 1.0"},
       {:explorer, "~> 0.7"},
 
       # Code quality and docs
