@@ -155,6 +155,7 @@ alias TelemetryMetricsMnesia, as: Metrics
 } = TelemetryMetricsMnesia.fetch([:http, :request, :counter])
 ```
 
+
 ## Copyright and License
 
 TelemetryMetricsMnesia is copyright (c) 2023 Anton Shvein.
