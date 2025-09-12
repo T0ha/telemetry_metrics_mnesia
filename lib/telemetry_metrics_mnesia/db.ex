@@ -26,43 +26,53 @@ defmodule TelemetryMetricsMnesia.Db do
     |> init_or_connect_mnesia_table(opts)
   end
 
-  # 1906
   def write_event(event, measurements, metadata, metrics) do
-    transaction = fn ->
-      timestamp = System.os_time(:microsecond)
+    transaction = fn metric, measurement ->
+      data =
+        {@telemetry_metrics_table, metric}
+        |> Mnesia.wread()
+        |> case do
+          [] -> []
+          [{_, _, data, _}] -> data
+        end
+        |> then(&[measurement | &1])
 
-      for metric <- metrics,
-          metric.event_name == event,
-          is_nil(metric.keep) or metric.keep.(metadata) do
-        data =
-          {@telemetry_metrics_table, metric}
-          |> Mnesia.wread()
-          |> case do
-            [] -> []
-            [{_, _, data, _}] -> data
-          end
+      value = apply_metric_type(data, metric)
 
-        key = List.last(metric.name)
-        tag_values = extract_tags(metric, metadata)
-
-        data =
-          measurements
-          |> Map.get(key, 0)
-          |> then(&[{timestamp, &1, tag_values} | data])
-
-        value = apply_metric_type(data, metric)
-
-        Mnesia.write(telemetry_metrics(metric: metric, data: data, value: value))
-      end
+      Mnesia.write(telemetry_metrics(metric: metric, data: data, value: value))
     end
 
-    case Mnesia.transaction(transaction) do
-      {:atomic, _events} ->
-        :ok
+    timestamp = System.os_time(:microsecond)
 
-      {:aborted, reason} ->
-        Logger.warning("Event #{inspect(event)} was not written to DB with reason: #{reason}")
-        {:error, reason}
+    for metric <- metrics,
+        metric.event_name == event,
+        is_nil(metric.keep) or metric.keep.(metadata) do
+      key = List.last(metric.name)
+      tag_values = extract_tags(metric, metadata)
+
+      measurement =
+        measurements
+        |> Map.get(key, 0)
+        |> then(&{timestamp, &1, tag_values})
+
+      case Mnesia.activity(trnasaction_type(), transaction, [metric, measurement]) do
+        {:atomic, _events} ->
+          :ok
+
+        {:aborted, reason} ->
+          Logger.warning("Event #{inspect(event)} was not written to DB with reason: #{reason}")
+          {:error, reason}
+
+        _ ->
+          :ok
+      end
+    end
+  end
+
+  defp trnasaction_type do
+    case Application.get_env(:telemetry_metrics_mnesia, :async, false) do
+      true -> :async_dirty
+      _ -> :transaction
     end
   end
 
@@ -224,11 +234,15 @@ defmodule TelemetryMetricsMnesia.Db do
   end
 
   defp create_or_copy_table(true) do
+    Logger.info("Mnesia connected nodes: #{inspect(Mnesia.system_info(:db_nodes))}")
+
     for {table, _fields} <- @telemetry_tables,
         do: Mnesia.add_table_copy(table, node(), :ram_copies)
   end
 
   defp create_or_copy_table(_) do
+    Logger.info("Mnesia starting on node: #{inspect(node())}")
+
     for {table, fields} <- @telemetry_tables do
       attributes = Keyword.keys(fields)
 
