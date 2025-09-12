@@ -25,3 +25,5 @@ telemetry_metrics_mnesia-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 node_modules
+.expert/expert.log
+.DS_Store
