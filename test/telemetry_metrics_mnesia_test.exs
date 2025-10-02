@@ -139,38 +139,124 @@ defmodule TelemetryMetricsMnesiaTest do
   end
 
   # @tag :skip
-  test "`counter` metrics fetch correctly timings are ok" do
-    counter = Telemetry.Metrics.counter([:test, :counter, :time, :counter])
-    garbage = Telemetry.Metrics.counter([:test, :garbage, :time, :garbage])
+  describe "performance tests" do
+    test "sync `counter` metrics fetch correctly timings are ok" do
+      counter = Telemetry.Metrics.counter([:test, :counter, :time, :counter])
+      garbage = Telemetry.Metrics.counter([:test, :garbage, :time, :garbage])
 
-    {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter, garbage])
+      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter, garbage])
 
-    n = @max_iterations
+      n = @max_iterations
 
-    times =
+      times =
+        for i <- 1..n do
+          {t, :ok} =
+            :timer.tc(fn ->
+              :telemetry.execute([:test, :counter, :time], %{val: i, total: n}, %{count: true})
+            end)
+
+          :telemetry.execute([:test, :garbage, :time], %{val: i, total: n}, %{count: false})
+          t
+        end
+        |> Explorer.Series.from_list()
+
+      assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 1000
+      assert Explorer.Series.quantile(times, 0.99) |> IO.inspect(label: "Insert time 99%") <= 5000
+
+      assert {t, %{Counter => ^n}} =
+               :timer.tc(fn ->
+                 TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
+               end)
+
+      assert IO.inspect(t, label: "Fetch time") <= 2000
+
+      GenServer.stop(pid)
+      Mnesia.clear_table(:telemetry_metrics)
+    end
+
+    @tag :skip
+    test "async `counter` metrics fetch correctly timings are ok" do
+      counter = Telemetry.Metrics.counter([:test, :counter, :time, :counter])
+      garbage = Telemetry.Metrics.counter([:test, :garbage, :time, :garbage])
+      Application.put_env(:telemetry_metrics_mnesia, :async, true)
+      {:ok, pid} = TelemetryMetricsMnesia.start_link(metrics: [counter, garbage])
+
+      # @max_iterations
+      n = 2000
+      parent = self()
+
       for i <- 1..n do
-        {t, :ok} =
-          :timer.tc(fn ->
-            :telemetry.execute([:test, :counter, :time], %{val: i, total: n}, %{count: true})
+        spawn(fn ->
+          {t, _} =
+            :timer.tc(fn ->
+              :telemetry.execute([:test, :counter, :time], %{val: i, total: n}, %{count: true})
+            end)
+
+          spawn(fn ->
+            :telemetry.execute([:test, :garbage, :time], %{val: i, total: n}, %{count: false})
           end)
 
-        :telemetry.execute([:test, :garbage, :time], %{val: i, total: n}, %{count: false})
-        t
+          send(parent, {:insert, t})
+        end)
       end
-      |> Explorer.Series.from_list()
 
-    assert Explorer.Series.median(times) |> IO.inspect(label: "Insert time median") <= 1000
-    assert Explorer.Series.quantile(times, 0.99) |> IO.inspect(label: "Insert time 99%") <= 5000
+      IO.puts("Inserted records #{2 * n}, waiting for fetch...")
 
-    assert {t, %{Counter => ^n}} =
-             :timer.tc(fn ->
-               TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
-             end)
+      for _ <- 1..n do
+        spawn(fn ->
+          {t, _} =
+            :timer.tc(fn ->
+              TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
+            end)
 
-    assert IO.inspect(t, label: "Fetch time") <= 2000
+          send(parent, {:fetch, t})
+        end)
+      end
 
-    GenServer.stop(pid)
-    Mnesia.clear_table(:telemetry_metrics)
+      IO.puts("Started #{n} fetch processes, collecting times...")
+
+      times = collect_times(2 * n)
+
+      insert_times = Explorer.Series.from_list(times[:insert])
+      fetch_times = Explorer.Series.from_list(times[:fetch])
+
+      assert Explorer.Series.median(insert_times) |> IO.inspect(label: "Insert time median") <=
+               500
+
+      assert Explorer.Series.quantile(insert_times, 0.99) |> IO.inspect(label: "Insert time 99%") <=
+               3000
+
+      assert Explorer.Series.median(fetch_times) |> IO.inspect(label: "fetch time median") <=
+               100_000
+
+      assert Explorer.Series.quantile(fetch_times, 0.99) |> IO.inspect(label: "fetch time 99%") <=
+               150_000
+
+      {_t, %{Counter => fetched}} =
+        :timer.tc(fn ->
+          TelemetryMetricsMnesia.fetch([:test, :counter, :time, :counter])
+        end)
+
+      assert fetched != 0
+
+      GenServer.stop(pid)
+      Mnesia.clear_table(:telemetry_metrics)
+    end
+
+    defp collect_times(n, acc \\ %{})
+    defp collect_times(0, acc), do: acc
+
+    defp collect_times(n, acc) do
+      receive do
+        {k, t} ->
+          acc =
+            Map.update(acc, k, [], fn a ->
+              [t | a]
+            end)
+
+          collect_times(n - 1, acc)
+      end
+    end
   end
 
   describe "metrics with tags works correctly" do
@@ -650,6 +736,7 @@ defmodule TelemetryMetricsMnesiaTest do
   end
 
   defp init_metrics(context) do
+    Application.put_env(:telemetry_metrics_mnesia, :async, false)
     opts = Map.get(context, :opts, [])
     metric = apply(Telemetry.Metrics, context[:metric], [[:test, context[:metric], :val], opts])
 

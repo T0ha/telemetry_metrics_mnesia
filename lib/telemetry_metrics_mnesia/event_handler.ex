@@ -38,9 +38,7 @@ defmodule TelemetryMetricsMnesia.EventHandler do
     # Logger.debug(
     #   ~c"handle_event(#{inspect(event)}, #{inspect(measurements)}, #{inspect(metadata)}, #{inspect(metrics)})"
     # )
-
     Db.write_event(event, measurements, metadata, metrics)
-
     :ok
   end
 end
