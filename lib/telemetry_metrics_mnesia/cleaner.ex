@@ -20,14 +20,14 @@ defmodule TelemetryMetricsMnesia.Cleaner do
         :ignore
 
       _ ->
-        Logger.info("Strting DB cleanup with @max_storage_time = #{@max_storage_time} sec")
+        Logger.info("Starting DB cleanup with @max_storage_time = #{@max_storage_time} sec")
         {:ok, %{}, @cleanup_timeout}
     end
   end
 
   @impl true
   def handle_info(:timeout, state) do
-    Logger.debug("Strting DB cleanup")
+    Logger.debug("Starting DB cleanup")
 
     timestamp =
       System.os_time(:microsecond) - @max_storage_time * 1_000_000
